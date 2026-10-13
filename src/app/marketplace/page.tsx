@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowDownUp, ArrowRight, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowDownUp, ArrowRight,Heart, Search, SlidersHorizontal } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
 import { demoProducts } from "@/features/marketplace/demo-products";
+import { useWishlist } from "@/features/marketplace/wishlist-provider";
 
 const categories = ["Wedding guest", "Evening wear", "Everyday chic"];
 
@@ -14,6 +15,7 @@ export default function MarketplacePage() {
   const [category, setCategory] = useState("All categories");
   const [maxPrice, setMaxPrice] = useState("all");
   const [sortBy, setSortBy] = useState("recommended");
+  const { toggleWishlist, isWishlisted, isLoaded } = useWishlist();
 
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -190,68 +192,99 @@ export default function MarketplacePage() {
 
           {filteredProducts.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredProducts.map((product) => (
-                <article
-                  key={product.id}
-                  className="overflow-hidden rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] transition hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  <Link
-                    href={`/marketplace/${product.id}`}
-                    aria-label={`View details for ${product.name}`}
-                    className="group block"
+              {filteredProducts.map((product) => {
+                const wishlisted = isWishlisted(product.id);
+
+                return (
+                  <article
+                    key={product.id}
+                    className="overflow-hidden rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] transition hover:-translate-y-0.5 hover:shadow-md"
                   >
-                    <div
-                      role="img"
-                      aria-label={`Demo fashion image for ${product.name}`}
-                      className="relative aspect-[4/5] bg-[#eee7e5] bg-cover bg-center"
-                      style={{
-                        backgroundImage: `url('${product.image}')`,
-                      }}
-                    >
-                      <span className="absolute left-3 top-3 rounded-full bg-[#fffdf9]/95 px-3 py-1.5 text-xs font-medium text-[#4c2544]">
-                        Demo listing
-                      </span>
-                    </div>
-
-                    <div className="p-5">
-                      <p className="text-xs uppercase tracking-[0.12em] text-[#927c59]">
-                        {product.category}
-                      </p>
-
-                      <h3 className="mt-2 font-serif text-2xl text-[#4c2544] group-hover:text-[#927c59]">
-                        {product.name}
-                      </h3>
-
-                      <p className="mt-1 text-sm text-[#716971]">
-                        {product.collection}
-                      </p>
-
-                      <p className="mt-3 text-sm leading-6 text-[#716971]">
-                        {product.description}
-                      </p>
-
-                      <div className="mt-5 flex items-end justify-between gap-3 border-t border-[#e4dfd7] pt-4">
-                        <div>
-                          <p className="text-xs text-[#716971]">
-                            Sample rental price
-                          </p>
-                          <p className="mt-1 text-lg font-semibold text-[#302d31]">
-                            ₹{product.price.toLocaleString("en-IN")}
-                            <span className="text-xs font-normal text-[#716971]">
-                              {" "}
-                              / {product.rentalPeriod}
-                            </span>
-                          </p>
+                    <div className="relative">
+                      <Link
+                        href={`/marketplace/${product.id}`}
+                        aria-label={`View details for ${product.name}`}
+                        className="group block"
+                >
+                        <div
+                          role="img"
+                          aria-label={`Demo fashion image for ${product.name}`}
+                          className="relative aspect-[4/5] bg-[#eee7e5] bg-cover bg-center"
+                          style={{
+                            backgroundImage: `url('${product.image}')`,
+                          }}
+                        >
+                          <span className="absolute left-3 top-3 rounded-full bg-[#fffdf9]/95 px-3 py-1.5 text-xs font-medium text-[#4c2544]">
+                            Demo listing
+                          </span>
                         </div>
+                      </Link>
 
-                        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#f3efe9] text-[#4c2544] transition group-hover:bg-[#4c2544] group-hover:text-white">
-                          <ArrowRight size={18} />
-                        </span>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleWishlist(product.id)}
+                        aria-label={
+                          wishlisted
+                            ? `Remove ${product.name} from wishlist`
+                            : `Add ${product.name} to wishlist`
+                        }
+                        aria-pressed={wishlisted}
+                        disabled={!isLoaded}
+                        className="absolute right-3 top-3 z-10 flex size-11 items-center justify-center rounded-full bg-[#fffdf9]/95 text-[#4c2544] shadow-sm transition hover:bg-white disabled:opacity-60"
+                      >
+                        <Heart
+                          size={20}
+                          fill={wishlisted ? "currentColor" : "none"}
+                          className={wishlisted ? "text-[#4c2544]" : ""}
+                        />
+                      </button>
                     </div>
-                  </Link>
-                </article>
-              ))}
+
+                    <Link
+                      href={`/marketplace/${product.id}`}
+                      aria-label={`View details for ${product.name}`}
+                      className="group block"
+                    >
+                      <div className="p-5">
+                        <p className="text-xs uppercase tracking-[0.12em] text-[#927c59]">
+                          {product.category}
+                        </p>
+
+                        <h3 className="mt-2 font-serif text-2xl text-[#4c2544] group-hover:text-[#927c59]">
+                          {product.name}
+                        </h3>
+
+                        <p className="mt-1 text-sm text-[#716971]">
+                          {product.collection}
+                        </p>
+
+                        <p className="mt-3 text-sm leading-6 text-[#716971]">
+                          {product.description}
+                        </p>
+
+                        <div className="mt-5 flex items-end justify-between gap-3 border-t border-[#e4dfd7] pt-4">
+                          <div>
+                            <p className="text-xs text-[#716971]">
+                              Sample rental price
+                            </p>
+                            <p className="mt-1 text-lg font-semibold text-[#302d31]">
+                              ₹{product.price.toLocaleString("en-IN")}
+                              <span className="text-xs font-normal text-[#716971]">
+                                {" "}/ {product.rentalPeriod}
+                              </span>
+                            </p>
+                          </div>
+
+                          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#f3efe9] text-[#4c2544] transition group-hover:bg-[#4c2544] group-hover:text-white">
+                            <ArrowRight size={18} />
+                          </span>
+                        </div>
+                      </div>
+                    </Link>
+                  </article>
+                );
+              })}
+
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-[#d9d1c9] bg-[#fffdf9] px-5 py-14 text-center">
