@@ -63,11 +63,12 @@ export default function CustomerHeader() {
           </Link>
 
           <Link
-            href="/login"
+            href="/profile"
+            aria-label="My profile"
             className="ml-1 inline-flex h-10 items-center gap-2 rounded-full bg-[#4c2544] px-5 text-sm font-medium text-white transition hover:bg-[#633358]"
           >
             <UserRound size={16} />
-            Sign in
+            My profile
           </Link>
         </div>
 
@@ -107,6 +108,14 @@ export default function CustomerHeader() {
               className="rounded-lg px-3 py-3 text-sm text-[#302d31] hover:bg-[#f3efe9]"
             >
               Wishlist
+            </Link>
+
+            <Link
+              href="/profile"
+              onClick={() => setMenuOpen(false)}
+              className="rounded-lg px-3 py-3 text-sm text-[#302d31] hover:bg-[#f3efe9]"
+            >
+              My profile
             </Link>
 
             <Link

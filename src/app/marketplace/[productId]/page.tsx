@@ -47,6 +47,15 @@ function ProductDetailContent() {
         ) + 1
       : 0;
 
+  const listedRentalDays = Number.parseInt(
+    product?.rentalPeriod ?? "",
+    10
+  );
+  const estimatedTotal =
+    product && rentalDays > 0 && listedRentalDays > 0
+      ? Math.round((product.price / listedRentalDays) * rentalDays)
+      : 0;
+
   function handleBookingRequest() {
     setMessage("");
 
@@ -223,15 +232,41 @@ function ProductDetailContent() {
               {rentalDays > 0 && (
                 <div className="mt-4 rounded-xl bg-[#f3efe9] p-4">
                   <p className="text-sm font-medium text-[#4c2544]">
-                    {rentalDays} {rentalDays === 1 ? "day" : "days"} selected
+                    Rental summary
                   </p>
-                  <p className="mt-1 text-sm text-[#716971]">
-                    Demo price for the listed rental period: ₹
-                    {product.price.toLocaleString("en-IN")}. This is not a
-                    calculated quote for your selected dates.
+
+                  <div className="mt-3 space-y-2 text-sm text-[#716971]">
+                    <div className="flex justify-between gap-3">
+                      <span>Selected duration</span>
+                      <span className="font-medium text-[#302d31]">
+                        {rentalDays} {rentalDays === 1 ? "day" : "days"}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between gap-3">
+                      <span>Listed price ({product.rentalPeriod})</span>
+                      <span className="font-medium text-[#302d31]">
+                        ₹{product.price.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between gap-3 border-t border-[#e4dfd7] pt-3">
+                      <span className="font-semibold text-[#4c2544]">
+                        Estimated total
+                      </span>
+                      <span className="text-lg font-semibold text-[#4c2544]">
+                        ₹{estimatedTotal.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="mt-3 text-xs leading-5 text-[#8a8188]">
+                    Illustrative estimate based on a proportional daily rate.
+                    Actual pricing, fees, and availability have not been verified.
                   </p>
                 </div>
               )}
+
 
               {message && (
                 <p
