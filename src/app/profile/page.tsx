@@ -1,7 +1,9 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { signOut } from "next-auth/react";
+import { api, jsonRequest } from "@/lib/api-client";
 import Link from "next/link";
 import { ArrowRight, Heart, Package, UserRound } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
@@ -11,12 +13,13 @@ type Customer = {
   name: string;
   email: string;
   phone: string;
+  role?: string;
 };
 
 export default function ProfilePage() {
   const [customer, setCustomer] = useState<Customer>({
-    name: "Demo Customer",
-    email: "customer@example.com",
+    name: "",
+    email: "",
     phone: "",
   });
 
@@ -24,17 +27,20 @@ export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
 
+  const [loadError, setLoadError] = useState("");
+  useEffect(() => { let active = true; api<Customer>("/api/profile").then(data => { if (active) { setCustomer(data); setForm(data); } }).catch(error => { if (active) setLoadError(error.message); }); return () => { active = false; }; }, []);
   function startEditing() {
     setForm(customer);
     setSavedMessage("");
     setIsEditing(true);
   }
 
-  function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setCustomer(form);
-    setIsEditing(false);
-    setSavedMessage("Profile updated for this session.");
+    try {
+      const updated = await api<Customer>("/api/profile", jsonRequest("PATCH", { name: form.name, phone: form.phone }));
+      setCustomer(updated); setIsEditing(false); setSavedMessage("Profile updated.");
+    } catch (error) { setSavedMessage(error instanceof Error ? error.message : "Profile could not be saved."); }
   }
 
   function cancelEditing() {
@@ -60,6 +66,12 @@ export default function ProfilePage() {
           </p>
         </div>
 
+        {loadError && <p role="alert" className="mb-6">{loadError} <Link className="underline" href="/login">Sign in</Link></p>}
+        {customer.email && <div className="mb-6 flex flex-wrap gap-5">
+          {customer.role === "BOUTIQUE_OWNER" && <Link className="underline" href="/boutique/dashboard">Open boutique workspace</Link>}
+          {customer.role === "ADMIN" && <Link className="underline" href="/admin/boutiques">Review boutique applications</Link>}
+          <button onClick={() => void signOut({ callbackUrl: "/" })} className="underline">Sign out</button>
+        </div>}
         <section className="rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-6 sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
             <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-[#f3efe9] text-[#4c2544]">
@@ -79,7 +91,7 @@ export default function ProfilePage() {
                     Phone: {customer.phone || "Not added"}
                   </p>
                   <p className="mt-3 inline-flex rounded-full bg-[#f3efe9] px-3 py-1 text-xs text-[#4c2544]">
-                    Demo profile
+                    {customer.role?.replaceAll("_", " ")}
                   </p>
                 </>
               ) : (
@@ -114,6 +126,7 @@ export default function ProfilePage() {
                     </label>
                     <input
                       id="customer-email"
+                      readOnly
                       name="email"
                       type="email"
                       required

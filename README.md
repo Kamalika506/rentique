@@ -1,4 +1,4 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Rentique is a customer and boutique rental marketplace built with Next.js and PostgreSQL. See [customer and boutique setup and API documentation](docs/CUSTOMER_BOUTIQUE_API.md) before running the app; configure the database and authentication secret, generate Prisma, and apply the database migration.
 
 ## Getting Started
 

@@ -1,3 +1,6 @@
+"use client";
+import { useWishlist } from "@/features/marketplace/wishlist-provider";
+import { useCatalog } from "@/features/marketplace/catalog";
 import Link from "next/link";
 import { ArrowRight, Heart, Leaf, ShieldCheck, Sparkles } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
@@ -24,40 +27,11 @@ const categories = [
   },
 ];
 
-const products = [
-  {
-    id: "demo-1",
-    name: "The Midnight Edit",
-    designer: "Evening collection",
-    price: 1299,
-    period: "4 days",
-    tag: "Evening favourite",
-    image:
-      "https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=800&q=85",
-  },
-  {
-    id: "demo-2",
-    name: "The Modern Muse",
-    designer: "Occasion collection",
-    price: 999,
-    period: "4 days",
-    tag: "Guest favourite",
-    image:
-      "https://images.unsplash.com/photo-1595777457583-95e059d581b8?auto=format&fit=crop&w=800&q=85",
-  },
-  {
-    id: "demo-3",
-    name: "The Soft Statement",
-    designer: "Contemporary collection",
-    price: 1499,
-    period: "4 days",
-    tag: "Editor's pick",
-    image:
-      "https://images.unsplash.com/photo-1539008835657-9e8e9680c956?auto=format&fit=crop&w=800&q=85",
-  },
-];
 
 export default function Home() {
+  const { toggleWishlist, isWishlisted, isLoaded } = useWishlist();
+  const { products: catalog, loading, error } = useCatalog();
+  const products = catalog.slice(0, 3).map(product => ({ ...product, designer: product.collection, period: product.rentalPeriod, tag: product.category }));
   return (
     <div className="min-h-screen bg-[#f7f5f1] text-[#302d31]">
       <CustomerHeader />
@@ -97,6 +71,16 @@ export default function Home() {
                 className="inline-flex min-h-12 items-center justify-center rounded-full border border-[#d7cec5] bg-[#fffdf9] px-7 py-3 text-sm font-medium text-[#4c2544] transition hover:bg-[#f3efe9]"
               >
                 Join Rentique
+              </Link>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-[#716971]">
+              <span>For boutique owners:</span>
+              <Link href="/boutique/register" className="font-medium text-[#4c2544] underline underline-offset-4">
+                Boutique registration
+              </Link>
+              <Link href="/login?intent=boutique" className="font-medium text-[#4c2544] underline underline-offset-4">
+                Boutique sign in
               </Link>
             </div>
 
@@ -250,6 +234,8 @@ export default function Home() {
               </Link>
             </div>
 
+            {loading && <p role="status">Loading collections?</p>}
+            {error && <p role="alert">{error}</p>}
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {products.map((product) => (
                 <article
@@ -259,23 +245,24 @@ export default function Home() {
                   <div className="relative">
                     <div
                       role="img"
-                      aria-label={`Demo fashion image for ${product.name}`}
+                      aria-label={`Fashion image for ${product.name}`}
                       className="aspect-[4/5] bg-cover bg-center"
                       style={{
                         backgroundImage: `url('${product.image}')`,
                       }}
                     />
                     <span className="absolute left-3 top-3 rounded-full bg-[#fffdf9]/95 px-3 py-1.5 text-xs font-medium text-[#4c2544]">
-                      Demo listing
+                      Boutique listing
                     </span>
                     <button
                       type="button"
-                      disabled
-                      aria-label={`Wishlist for ${product.name} is not connected yet`}
-                      title="Wishlist will be enabled in a later stage"
-                      className="absolute right-3 top-3 flex size-10 cursor-not-allowed items-center justify-center rounded-full bg-[#fffdf9]/95 text-[#8a8188] opacity-80"
+                      disabled={!isLoaded}
+                      onClick={() => toggleWishlist(product.id)}
+                      aria-pressed={isWishlisted(product.id)}
+                      aria-label={`Toggle wishlist for ${product.name}`}
+                      className="absolute right-3 top-3 flex size-10  items-center justify-center rounded-full bg-[#fffdf9]/95 text-[#8a8188] opacity-80"
                     >
-                      <Heart size={18} />
+                      <Heart size={18} fill={isWishlisted(product.id) ? "currentColor" : "none"} />
                     </button>
                   </div>
 
@@ -292,7 +279,7 @@ export default function Home() {
                     <div className="mt-5 flex items-end justify-between gap-3 border-t border-[#e4dfd7] pt-4">
                       <div>
                         <p className="text-xs text-[#716971]">
-                          Sample rental price
+                          Rental price
                         </p>
                         <p className="mt-1 text-lg font-semibold text-[#302d31]">
                           ₹{product.price.toLocaleString("en-IN")}
@@ -303,7 +290,7 @@ export default function Home() {
                         </p>
                       </div>
                       <Link
-                        href="/marketplace"
+                        href={`/marketplace/${product.id}`}
                         className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-[#4c2544] hover:text-[#927c59]"
                       >
                         Explore <ArrowRight size={15} />
@@ -315,9 +302,7 @@ export default function Home() {
             </div>
 
             <div className="mt-6 rounded-xl border border-[#d8cbc9] bg-[#fffdf9]/70 px-4 py-3 text-xs leading-5 text-[#716971]">
-              These listings are illustrative demo content. Prices,
-              availability, booking, and wishlist actions are not connected to
-              the backend.
+              Explore boutique listings and choose your rental dates in the marketplace.
             </div>
           </div>
         </section>

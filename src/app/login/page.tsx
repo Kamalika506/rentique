@@ -1,20 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { api } from "@/lib/api-client";
 import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, LockKeyhole } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
 
 export default function LoginPage() {
+  return <Suspense fallback={<main className="p-8" role="status">Loading sign in...</main>}><LoginForm /></Suspense>;
+}
+
+function LoginForm() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const boutiqueIntent = params.get("intent") === "boutique";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(params.get("registered") === "boutique" ? "Your boutique application has been saved. Sign in to open your dashboard." : "");
   const [error, setError] = useState("");
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     setMessage("");
     setError("");
 
@@ -23,9 +36,16 @@ export default function LoginPage() {
       return;
     }
 
-    setMessage(
-      "Your details passed the basic checks. Sign-in will be enabled when the authentication API is connected."
-    );
+    setBusy(true);
+    try {
+      const result = await signIn("credentials", { email: email.trim().toLowerCase(), password, redirect: false });
+      if (result?.error) { setError("Email or password is incorrect."); return; }
+      const account = await api<{ role: string }>("/api/profile");
+      window.dispatchEvent(new Event("rentique:session-change"));
+      router.push(account.role === "BOUTIQUE_OWNER" ? "/boutique/dashboard" : boutiqueIntent && account.role === "CUSTOMER" ? "/boutique/register" : "/profile");
+      router.refresh();
+    } catch { setError("Unable to sign in. Please try again."); }
+    finally { setBusy(false); }
   }
 
   return (
@@ -43,11 +63,11 @@ export default function LoginPage() {
           </p>
 
           <h1 className="mt-3 font-serif text-4xl text-[#4c2544]">
-            Sign in to Rentique
+            {boutiqueIntent ? "Boutique sign in" : "Sign in to Rentique"}
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-[#716971]">
-            Sign in to manage your account, wishlist, and rentals.
+            {boutiqueIntent ? "Sign in to continue your boutique registration or open your dashboard." : "Sign in to manage your account, wishlist, and rentals."}
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
@@ -125,24 +145,25 @@ export default function LoginPage() {
 
             <button
               type="submit"
+              disabled={busy}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#4c2544] px-5 text-sm font-medium text-white transition hover:bg-[#633358] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4c2544]"
             >
-              Sign in <ArrowRight size={17} />
+              {busy ? "Signing in?" : "Sign in"} <ArrowRight size={17} />
             </button>
           </form>
 
           <p className="mt-7 text-center text-sm text-[#716971]">
             New to Rentique?{" "}
             <Link
-              href="/register"
+              href={boutiqueIntent ? "/register?intent=boutique" : "/register"}
               className="font-semibold text-[#4c2544] underline-offset-4 hover:underline"
             >
-              Create an account
+              {boutiqueIntent ? "Create a boutique account" : "Create an account"}
             </Link>
           </p>
 
           <p className="mt-5 text-center text-xs leading-5 text-[#8a8188]">
-            Demo interface. Authentication is not connected yet.
+            Use your Rentique account to manage rentals or your boutique.
           </p>
         </section>
       </main>

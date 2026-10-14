@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,7 +36,14 @@ export function RegistrationForm() {
     clearErrors("root");
     try {
       await service.createApplication(values);
-      router.push("/boutique/pending");
+      if (service.mode === "live") {
+        await signOut({ redirect: false });
+        window.dispatchEvent(new Event("rentique:session-change"));
+        router.push("/login?intent=boutique&registered=boutique");
+        router.refresh();
+      } else {
+        router.push("/boutique/pending");
+      }
     } catch (error) {
       if (error instanceof OnboardingServiceError && error.fieldErrors) {
         for (const [field, message] of Object.entries(error.fieldErrors)) if (message) setError(field as keyof BoutiqueRegistration, { message }, { shouldFocus: true });
@@ -90,7 +98,7 @@ export function RegistrationForm() {
           <div className="mt-5">{field("socialLink")}</div>
         </fieldset>
         {errors.root && <p role="alert" className={`${styles.error} mt-5`}>{errors.root.message} <Link className={styles.textLink} href="/boutique/pending">View application status</Link></p>}
-        {isSubmitSuccessful && !errors.root && <p role="status" className="mt-5 text-sm text-[#4c2544]">Application created as PENDING. Opening your application status…</p>}
+        {isSubmitSuccessful && !errors.root && <p role="status" className="mt-5 text-sm text-[#4c2544]">Application submitted. Opening sign in...</p>}
         <Button type="submit" disabled={locked} className={styles.submit}>{isSubmitting ? <><LoaderCircle className="animate-spin" />Submitting application…</> : <>Submit boutique application<ArrowRight /></>}</Button>
         <p className={styles.finePrint}>Submitting an application does not grant management access.<br />Boutiques must be approved before management becomes available.</p>
       </form>

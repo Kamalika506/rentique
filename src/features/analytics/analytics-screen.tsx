@@ -6,7 +6,7 @@ import { BoutiqueSidebar } from "../boutiques/dashboard/boutique-sidebar";
 import { BoutiqueTopNavigation } from "../boutiques/dashboard/top-navigation";
 import { bookingMoney } from "../boutiques/booking-management/service";
 import { calculateAnalytics } from "./calculations";
-import { createDemoAnalyticsService } from "./adapters/mock/analytics";
+import { createLiveAnalyticsService } from "@/features/boutiques/adapters/live";
 import type { AnalyticsDataset, BoutiqueAnalyticsService } from "./service";
 import styles from "../boutiques/dashboard/dashboard.module.css";
 import charts from "./analytics.module.css";
@@ -16,8 +16,8 @@ function monthLabel(month: string) {
 }
 
 export function AnalyticsScreen({ service: suppliedService }: { service?: BoutiqueAnalyticsService }) {
-  const [demoService] = useState(createDemoAnalyticsService);
-  const service = suppliedService ?? demoService;
+  const [liveService] = useState(createLiveAnalyticsService);
+  const service = suppliedService ?? liveService;
   const [result, setResult] = useState<{ data: AnalyticsDataset; metrics: ReturnType<typeof calculateAnalytics> } | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [request, setRequest] = useState(0);

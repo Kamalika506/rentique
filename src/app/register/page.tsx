@@ -1,12 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
+import { api, jsonRequest } from "@/lib/api-client";
 import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, UserRound } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
 
 export default function RegisterPage() {
+  return <Suspense fallback={<main className="p-8" role="status">Loading registration...</main>}><RegisterForm /></Suspense>;
+}
+
+function RegisterForm() {
+  const router = useRouter();
+  const boutiqueIntent = useSearchParams().get("intent") === "boutique";
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,8 +25,11 @@ export default function RegisterPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     setMessage("");
     setError("");
 
@@ -31,9 +43,21 @@ export default function RegisterPage() {
       return;
     }
 
-    setMessage(
-      "Your details passed the basic checks. Account creation will be enabled when the registration API is connected."
-    );
+    setBusy(true);
+    try {
+      await api("/api/register", jsonRequest("POST", { name, email, password }));
+      if (boutiqueIntent) {
+        const result = await signIn("credentials", { email: email.trim().toLowerCase(), password, redirect: false });
+        if (result?.error) { setMessage("Account created. Sign in below to continue boutique registration."); return; }
+        window.dispatchEvent(new Event("rentique:session-change"));
+        router.push("/boutique/register");
+        router.refresh();
+        return;
+      }
+      setMessage("Account created. You can now sign in.");
+      setPassword(""); setConfirmPassword("");
+    } catch (error) { setError(error instanceof Error ? error.message : "Registration failed."); }
+    finally { setBusy(false); }
   }
 
   return (
@@ -51,12 +75,11 @@ export default function RegisterPage() {
           </p>
 
           <h1 className="mt-3 font-serif text-4xl text-[#4c2544]">
-            Join Rentique
+            {boutiqueIntent ? "Create your boutique account" : "Join Rentique"}
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-[#716971]">
-            Create your account to explore fashion rentals and manage your
-            favourite looks.
+            {boutiqueIntent ? "Create an owner account, then tell us about your boutique." : "Create your account to explore fashion rentals and manage your favourite looks."}
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
@@ -201,16 +224,17 @@ export default function RegisterPage() {
 
             <button
               type="submit"
+              disabled={busy}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#4c2544] px-5 text-sm font-medium text-white transition hover:bg-[#633358] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#4c2544]"
             >
-              Create account <ArrowRight size={17} />
+              {busy ? "Creating account?" : "Create account"} <ArrowRight size={17} />
             </button>
           </form>
 
           <p className="mt-7 text-center text-sm text-[#716971]">
             Already have an account?{" "}
             <Link
-              href="/login"
+              href={boutiqueIntent ? "/login?intent=boutique" : "/login"}
               className="font-semibold text-[#4c2544] underline-offset-4 hover:underline"
             >
               Sign in
@@ -218,7 +242,7 @@ export default function RegisterPage() {
           </p>
 
           <p className="mt-5 text-center text-xs leading-5 text-[#8a8188]">
-            Demo interface. Account creation is not connected yet.
+            {boutiqueIntent ? "After submitting your boutique registration, sign in to access your dashboard." : "After creating an account, sign in to place rental requests and manage your account."}
           </p>
         </section>
       </main>

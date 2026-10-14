@@ -1,16 +1,7 @@
-
 "use client";
-
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
-
-const STORAGE_KEY = "rentique-wishlist";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { api, HttpError, jsonRequest } from "@/lib/api-client";
 
 type WishlistContextValue = {
   productIds: string[];
@@ -19,82 +10,28 @@ type WishlistContextValue = {
   isWishlisted: (productId: string) => boolean;
   removeFromWishlist: (productId: string) => void;
 };
-
 const WishlistContext = createContext<WishlistContextValue | null>(null);
-
 export function WishlistProvider({ children }: { children: ReactNode }) {
-  const [productIds, setProductIds] = useState<string[]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-
+  const [productIds, setProductIds] = useState<string[]>([]), [isLoaded, setIsLoaded] = useState(false), [error, setError] = useState("");
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-
-      if (stored) {
-        const parsed: unknown = JSON.parse(stored);
-
-        if (
-          Array.isArray(parsed) &&
-          parsed.every((id) => typeof id === "string")
-        ) {
-          setProductIds(parsed);
-        }
-      }
-    } catch {
-      // Start with an empty wishlist if stored data is invalid.
-    } finally {
-      setIsLoaded(true);
+    let active = true;
+    const load = () => api<string[]>("/api/wishlist").then(ids => { if (active) { setProductIds(ids); setIsLoaded(true); } }).catch(() => { if (active) { setProductIds([]); setIsLoaded(true); } });
+    void load(); window.addEventListener("focus", load); window.addEventListener("rentique:session-change", load);
+    return () => { active = false; window.removeEventListener("focus", load); window.removeEventListener("rentique:session-change", load); };
+  }, []);
+  const change = useCallback(async (productId: string, method: string) => {
+    setError("");
+    try { setProductIds(await api<string[]>("/api/wishlist", jsonRequest(method, { productId }))); }
+    catch (error) {
+      if (error instanceof HttpError && error.status === 401) setError("Sign in to save your wishlist.");
+      else setError(error instanceof Error ? error.message : "Wishlist could not be updated.");
     }
   }, []);
-
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(productIds));
-    } catch {
-      // Keep the wishlist usable for the current session.
-    }
-  }, [productIds, isLoaded]);
-
-  const toggleWishlist = useCallback((productId: string) => {
-    setProductIds((current) =>
-      current.includes(productId)
-        ? current.filter((id) => id !== productId)
-        : [...current, productId],
-    );
-  }, []);
-
-  const isWishlisted = useCallback(
-    (productId: string) => productIds.includes(productId),
-    [productIds],
-  );
-
-  const removeFromWishlist = useCallback((productId: string) => {
-    setProductIds((current) => current.filter((id) => id !== productId));
-  }, []);
-
-  return (
-    <WishlistContext.Provider
-      value={{
-        productIds,
-        isLoaded,
-        toggleWishlist,
-        isWishlisted,
-        removeFromWishlist,
-      }}
-    >
-      {children}
-    </WishlistContext.Provider>
-  );
+  const toggleWishlist = useCallback((id: string) => { void change(id, productIds.includes(id) ? "DELETE" : "POST"); }, [change, productIds]);
+  const removeFromWishlist = useCallback((id: string) => { void change(id, "DELETE"); }, [change]);
+  const isWishlisted = useCallback((id: string) => productIds.includes(id), [productIds]);
+  return <WishlistContext.Provider value={{ productIds, isLoaded, toggleWishlist, removeFromWishlist, isWishlisted }}>{children}
+    {error && <div role="alert" className="fixed bottom-5 left-5 right-5 z-50 rounded-xl border bg-white p-4 shadow">{error} <Link className="ml-3 underline" href="/login">Sign in</Link><button onClick={() => setError("")} className="ml-3 underline">Dismiss</button></div>}
+  </WishlistContext.Provider>;
 }
-
-export function useWishlist() {
-  const context = useContext(WishlistContext);
-
-  if (!context) {
-    throw new Error("useWishlist must be used inside WishlistProvider");
-  }
-
-  return context;
-}
+export function useWishlist() { const context = useContext(WishlistContext); if (!context) throw new Error("WishlistProvider is required."); return context; }

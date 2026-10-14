@@ -5,12 +5,13 @@ import Link from "next/link";
 import { ArrowDownUp, ArrowRight,Heart, Search, SlidersHorizontal } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
-import { demoProducts } from "@/features/marketplace/demo-products";
+import { useCatalog } from "@/features/marketplace/catalog";
 import { useWishlist } from "@/features/marketplace/wishlist-provider";
 
-const categories = ["Wedding guest", "Evening wear", "Everyday chic"];
+const categories = ["Bridal", "Ethnic wear", "Occasion wear", "Western wear", "Accessories"];
 
 export default function MarketplacePage() {
+  const { products, loading, error } = useCatalog();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All categories");
   const [maxPrice, setMaxPrice] = useState("all");
@@ -20,7 +21,7 @@ export default function MarketplacePage() {
   const filteredProducts = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    const results = demoProducts.filter((product) => {
+    const results = products.filter((product) => {
       const matchesSearch =
         !query ||
         product.name.toLowerCase().includes(query) ||
@@ -42,7 +43,7 @@ export default function MarketplacePage() {
       if (sortBy === "name") return a.name.localeCompare(b.name);
       return 0;
     });
-  }, [search, category, maxPrice, sortBy]);
+  }, [products, search, category, maxPrice, sortBy]);
 
   function clearFilters() {
     setSearch("");
@@ -72,8 +73,7 @@ export default function MarketplacePage() {
             </p>
 
             <p className="mt-4 text-xs text-[#716971]">
-              Demo marketplace. Products, prices, and availability are
-              illustrative and are not connected to live inventory.
+              Browse collections from approved boutiques and request your rental dates.
             </p>
           </div>
         </section>
@@ -190,7 +190,7 @@ export default function MarketplacePage() {
             </div>
           </div>
 
-          {filteredProducts.length > 0 ? (
+          {loading ? <p role="status">Loading boutique collections?</p> : error ? <p role="alert">{error}</p> : filteredProducts.length > 0 ? (
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {filteredProducts.map((product) => {
                 const wishlisted = isWishlisted(product.id);
@@ -208,14 +208,14 @@ export default function MarketplacePage() {
                 >
                         <div
                           role="img"
-                          aria-label={`Demo fashion image for ${product.name}`}
+                          aria-label={`Fashion image for ${product.name}`}
                           className="relative aspect-[4/5] bg-[#eee7e5] bg-cover bg-center"
                           style={{
                             backgroundImage: `url('${product.image}')`,
                           }}
                         >
                           <span className="absolute left-3 top-3 rounded-full bg-[#fffdf9]/95 px-3 py-1.5 text-xs font-medium text-[#4c2544]">
-                            Demo listing
+                            Boutique listing
                           </span>
                         </div>
                       </Link>
@@ -265,7 +265,7 @@ export default function MarketplacePage() {
                         <div className="mt-5 flex items-end justify-between gap-3 border-t border-[#e4dfd7] pt-4">
                           <div>
                             <p className="text-xs text-[#716971]">
-                              Sample rental price
+                              Rental price
                             </p>
                             <p className="mt-1 text-lg font-semibold text-[#302d31]">
                               ₹{product.price.toLocaleString("en-IN")}
@@ -307,9 +307,7 @@ export default function MarketplacePage() {
           )}
 
           <p className="mt-8 text-xs leading-5 text-[#8a8188]">
-            All products and prices shown here are demo data. Live inventory,
-            availability, and booking will be integrated through the team's
-            agreed backend APIs.
+            Availability is checked for your selected size and rental dates when you place an order.
           </p>
         </section>
       </main>

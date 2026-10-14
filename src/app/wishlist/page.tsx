@@ -5,17 +5,18 @@ import Link from "next/link";
 import { Heart, ArrowRight, Trash2 } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
-import { demoProducts } from "@/features/marketplace/demo-products";
+import { useCatalog } from "@/features/marketplace/catalog";
 import { useWishlist } from "@/features/marketplace/wishlist-provider";
 
 export default function WishlistPage() {
+  const { products, loading, error } = useCatalog();
   const {
     productIds,
     isLoaded,
     removeFromWishlist,
   } = useWishlist();
 
-  const savedProducts = demoProducts.filter((product) =>
+  const savedProducts = products.filter((product) =>
     productIds.includes(product.id),
   );
 
@@ -40,7 +41,8 @@ export default function WishlistPage() {
           you are ready.
         </p>
 
-        {!isLoaded ? (
+        {error && <p role="alert">{error}</p>}
+        {!isLoaded || loading ? (
           <p className="mt-10 text-sm text-[#716971]">
             Loading your wishlist...
           </p>
@@ -85,7 +87,7 @@ export default function WishlistPage() {
                   >
                     <div
                       role="img"
-                      aria-label={`Demo fashion image for ${product.name}`}
+                      aria-label={`Fashion image for ${product.name}`}
                       className="aspect-[4/5] bg-[#eee7e5] bg-cover bg-center"
                       style={{
                         backgroundImage: `url('${product.image}')`,
@@ -142,7 +144,7 @@ export default function WishlistPage() {
         )}
 
         <p className="mt-8 text-xs leading-5 text-[#8a8188]">
-          Your wishlist is stored locally in this browser for this demo.
+          Your wishlist is saved to your Rentique account.
           It is not synced to an account or across devices.
         </p>
       </main>
