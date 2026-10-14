@@ -35,6 +35,7 @@ function ProductDetailContent() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [message, setMessage] = useState("");
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   const today = new Date().toLocaleDateString("en-CA");
 
@@ -58,6 +59,7 @@ function ProductDetailContent() {
 
   function handleBookingRequest() {
     setMessage("");
+    setShowConfirmation(false);
 
     if (!startDate || !endDate) {
       setMessage("Please select your rental start and end dates.");
@@ -74,9 +76,7 @@ function ProductDetailContent() {
       return;
     }
 
-    setMessage(
-      "Your dates have been selected. Booking is a demo only and has not been saved."
-    );
+    setShowConfirmation(true);
   }
 
   if (!product) {
@@ -203,6 +203,7 @@ function ProductDetailContent() {
                     onChange={(event) => {
                       setStartDate(event.target.value);
                       setMessage("");
+                      setShowConfirmation(false);
                     }}
                     className="h-12 w-full min-w-0 rounded-xl border border-[#d9d1c9] bg-white px-3 text-sm outline-none focus:border-[#4c2544] focus:ring-2 focus:ring-[#4c2544]/10"
                   />
@@ -223,6 +224,7 @@ function ProductDetailContent() {
                     onChange={(event) => {
                       setEndDate(event.target.value);
                       setMessage("");
+                      setShowConfirmation(false);
                     }}
                     className="h-12 w-full min-w-0 rounded-xl border border-[#d9d1c9] bg-white px-3 text-sm outline-none focus:border-[#4c2544] focus:ring-2 focus:ring-[#4c2544]/10"
                   />
@@ -267,16 +269,95 @@ function ProductDetailContent() {
                 </div>
               )}
 
-
-              {message && (
-                <p
+              
+              {showConfirmation ? (
+                <div
                   role="status"
-                  className="mt-4 rounded-xl bg-[#f3efe9] p-3 text-sm leading-6 text-[#4c2544]"
+                  aria-live="polite"
+                  className="mt-5 rounded-2xl border border-[#d8c8d5] bg-[#fffdf9] p-5"
                 >
-                  {message}
-                </p>
-              )}
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={21} className="shrink-0 text-[#4c2544]" />
+                    <h3 className="font-serif text-xl text-[#4c2544]">
+                      Rental preview ready
+                    </h3>
+                  </div>
 
+                  <p className="mt-2 text-sm leading-6 text-[#716971]">
+                    Review your selected rental dates and estimated price below.
+                  </p>
+
+                  <div className="mt-4 space-y-3 border-t border-[#e4dfd7] pt-4 text-sm">
+                    <div className="flex justify-between gap-4">
+                      <span className="text-[#716971]">Product</span>
+                      <span className="text-right font-medium text-[#302d31]">
+                        {product.name}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between gap-4">
+                      <span className="text-[#716971]">Start date</span>
+                      <span className="text-right font-medium text-[#302d31]">
+                        {new Date(`${startDate}T00:00:00`).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between gap-4">
+                      <span className="text-[#716971]">End date</span>
+                      <span className="text-right font-medium text-[#302d31]">
+                        {new Date(`${endDate}T00:00:00`).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between gap-4">
+                      <span className="text-[#716971]">Duration</span>
+                      <span className="font-medium text-[#302d31]">
+                        {rentalDays} {rentalDays === 1 ? "day" : "days"}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between gap-4 border-t border-[#e4dfd7] pt-3">
+                      <span className="font-semibold text-[#4c2544]">
+                        Estimated total
+                      </span>
+                      <span className="text-lg font-semibold text-[#4c2544]">
+                        ₹{estimatedTotal.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="mt-4 rounded-xl bg-[#f3efe9] p-3 text-xs leading-5 text-[#716971]">
+                    Demo only. This is an estimated rental preview, not a confirmed
+                    booking. Nothing has been reserved, saved, or paid for, and
+                    availability has not been checked.
+                  </p>
+
+                  <Link
+                    href="/marketplace"
+                    className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full bg-[#4c2544] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#633358]"
+                  >
+                    Return to marketplace
+                    <ArrowRight size={17} />
+                  </Link>
+                </div>
+              ) : (
+                message && (
+                  <p
+                    role="alert"
+                    className="mt-4 rounded-xl bg-[#f3efe9] p-3 text-sm leading-6 text-[#4c2544]"
+                  >
+                    {message}
+                  </p>
+                ) 
+              )}
               <button
                 type="button"
                 onClick={handleBookingRequest}
