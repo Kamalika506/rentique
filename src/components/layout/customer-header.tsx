@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import {
   Heart,
   Menu,
@@ -19,6 +20,9 @@ const navLinks = [
 
 export default function CustomerHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { data: session, status } = useSession();
+  const user = session?.user;
+  const username = user?.name || user?.email?.split("@")[0] || "My account";
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#e4dfd7] bg-[#fffdf9]/95 backdrop-blur">
@@ -63,16 +67,20 @@ export default function CustomerHeader() {
             <Heart size={19} />
           </Link>
 
-          <Link
+          {user ? <Link
             href="/profile"
-            aria-label="My profile"
+            aria-label={`Account for ${username}`}
             className="ml-1 inline-flex h-10 items-center gap-2 rounded-full bg-[#4c2544] px-5 text-sm font-medium text-white transition hover:bg-[#633358]"
           >
             <UserRound size={16} />
-            My profile
-          </Link>
+            <span className="max-w-32 truncate">{username}</span>
+          </Link> : status === "loading" ? <span role="status" className="px-3 text-sm">Loading account...</span> : <>
+            <Link href="/login" className="px-3 text-sm text-[#4c2544]">Login</Link>
+            <Link href="/register" className="rounded-full bg-[#4c2544] px-5 py-2.5 text-sm text-white">Sign up</Link>
+          </>}
         </div>
 
+        {user && <Link href="/profile" className="ml-auto max-w-28 truncate text-sm font-medium text-[#4c2544] sm:hidden">{username}</Link>}
         <button
           type="button"
           onClick={() => setMenuOpen((open) => !open)}
@@ -111,22 +119,10 @@ export default function CustomerHeader() {
               Wishlist
             </Link>
 
-            <Link
-              href="/profile"
-              onClick={() => setMenuOpen(false)}
-              className="rounded-lg px-3 py-3 text-sm text-[#302d31] hover:bg-[#f3efe9]"
-            >
-              My profile
-            </Link>
-
-            <Link
-              href="/login"
-              onClick={() => setMenuOpen(false)}
-              className="mt-2 flex items-center justify-center gap-2 rounded-full bg-[#4c2544] px-4 py-3 text-sm font-medium text-white"
-            >
-              <UserRound size={17} />
-              Sign in
-            </Link>
+            {user ? <Link href="/profile" onClick={() => setMenuOpen(false)} className="rounded-lg px-3 py-3 text-sm text-[#302d31]">{username}</Link> : status === "loading" ? <p role="status">Loading account...</p> : <>
+              <Link href="/login" onClick={() => setMenuOpen(false)} className="rounded-full bg-[#4c2544] px-4 py-3 text-center text-sm text-white">Login</Link>
+              <Link href="/register" onClick={() => setMenuOpen(false)} className="rounded-full border border-[#4c2544] px-4 py-3 text-center text-sm text-[#4c2544]">Sign up</Link>
+            </>}
           </div>
         </nav>
       )}

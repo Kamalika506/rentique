@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { ApiError } from "@/lib/api";
+import { ApiError, currentUser } from "@/lib/api";
 import { lineAmounts, rentalDays, reservingStatuses } from "./rules";
 import type { Prisma } from "@/generated/prisma/client";
 
@@ -20,6 +20,7 @@ export async function reservedUnits(db: Prisma.TransactionClient, variantId: str
 }
 export const quoteSchema = z.object({ variantId: z.string().min(1), quantity: z.coerce.number().int().min(1).max(100).default(1), pickupAt: z.string().datetime({ offset: true }), returnAt: z.string().datetime({ offset: true }) });
 export async function availability(request: Request) {
+  await currentUser();
   const input = quoteSchema.parse(Object.fromEntries(new URL(request.url).searchParams));
   const pickupAt = new Date(input.pickupAt), returnAt = new Date(input.returnAt);
   let days: number;

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { WishlistProvider } from "@/features/marketplace/wishlist-provider";
+import CustomerSessionProvider from "@/components/session-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <WishlistProvider>{children}</WishlistProvider>
+        <CustomerSessionProvider><WishlistProvider>{children}</WishlistProvider></CustomerSessionProvider>
       </body>
     </html>
   );

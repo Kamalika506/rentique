@@ -41,11 +41,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-<<<<<<< Updated upstream
 /src/generated/prisma
 
 # Local integration-test database and logs
 /.tmp/
-=======
-/src/generated/
->>>>>>> Stashed changes

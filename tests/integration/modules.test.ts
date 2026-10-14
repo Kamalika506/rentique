@@ -178,7 +178,9 @@ test("connected discovery, storefronts, admin, availability, reviews and recover
 
     const pickup = new Date(Date.now() + 3 * 86400000), returned = new Date(pickup.getTime() + 4 * 86400000);
     const order = { variantId, quantity: 3, pickupAt: pickup.toISOString(), returnAt: returned.toISOString() };
-    const quote = (start = pickup, end = returned, quantity = 1) => anonymous(`/api/availability?${new URLSearchParams({ variantId, quantity: String(quantity), pickupAt: start.toISOString(), returnAt: end.toISOString() })}`);
+    assert.equal((await anonymous("/api/availability")).status, 401, "Guests cannot access availability.");
+    assert.equal((await anonymous("/api/recommendations", "POST", {})).status, 401, "Guests cannot access date-based recommendations.");
+    const quote = (start = pickup, end = returned, quantity = 1) => customerClient(`/api/availability?${new URLSearchParams({ variantId, quantity: String(quantity), pickupAt: start.toISOString(), returnAt: end.toISOString() })}`);
     const initialQuote = await quote(pickup, returned, 3); assert.equal(initialQuote.status, 200); assert.equal(initialQuote.data.available, true); assert.equal(initialQuote.data.availableUnits, 3);
     async function reservation(start: Date, end: Date, quantity: number, status: "CONFIRMED" | "COMPLETED" = "CONFIRMED", customerId = customer.id) {
       return db.booking.create({ data: { boutiqueId: shop.id, customerId, status, pickupAt: start, returnAt: end, rentalMinor: 20000, depositMinor: 20000, ...(status === "COMPLETED" ? { returnedAt: end, completedAt: end } : {}), items: { create: { variantId, quantity, productNameSnap: red.name, sizeSnapshot: "L", categorySnapshot: "OTHER", rentalMinor: 20000, depositMinor: 20000 } } } });

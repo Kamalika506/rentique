@@ -13,7 +13,9 @@
     "db:migrate": "prisma migrate deploy",
     "check:deployment": "tsx scripts/check-deployment.ts",
     "admin:provision": "tsx scripts/provision-admin.ts",
-    "check:local": "tsx scripts/check-deployment.ts --local"
+    "check:local": "tsx scripts/check-deployment.ts --local",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed:tifara": "tsx scripts/seed-tifara.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",
