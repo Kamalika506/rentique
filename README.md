@@ -1,4 +1,4 @@
-Rentique is a customer and boutique rental marketplace built with Next.js and PostgreSQL. See [customer and boutique setup and API documentation](docs/CUSTOMER_BOUTIQUE_API.md) before running the app; configure the database and authentication secret, generate Prisma, and apply the database migration.
+Rentique is a customer and boutique rental marketplace built with Next.js and PostgreSQL. See [setup, Gmail/admin configuration, API contracts and verification](docs/CUSTOMER_BOUTIQUE_API.md) before running the app; configure the database and authentication secret, generate Prisma, and apply the database migrations.
 
 ## Getting Started
 

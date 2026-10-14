@@ -1,59 +1,102 @@
-# Customer and boutique integration
+# Rentique setup and connected modules
 
-The customer marketplace, product details, rental orders, profile, wishlist, and boutique management now use PostgreSQL records through API routes. Production providers use the live adapters; the mock adapters remain available for fixture tests.
+Rentique uses Next.js App Router, React, TypeScript and Tailwind for the interface; Next.js route handlers for the backend; Auth.js for credentials/optional Google authentication; and Prisma with PostgreSQL for persistence. Customer, boutique and administrator screens use live APIs. Demo adapters are retained only for fixture tests.
 
 ## Local setup
 
-Set `DATABASE_URL` and `AUTH_SECRET` in `.env.local`. Both are currently empty in this checkout. Use a PostgreSQL connection URL for your development database and generate a secret with:
+Keep credentials in ignored `.env.local`. `.env.example` documents the supported variables. Shell variables take precedence over local files.
 
 ```powershell
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-```
-
-Then run:
-
-```powershell
-npm.cmd install
+npm.cmd ci
 npm.cmd run db:generate
 npm.cmd run db:migrate
+npm.cmd run check:local
 npm.cmd run dev
 ```
 
-Prisma commands read `.env.local` before `.env`; shell variables take precedence. `db:migrate` applies the existing migration, so use a development database you intend to initialize. No new migration is needed for this integration.
+Set `DATABASE_URL` and a random `AUTH_SECRET` of at least 32 characters. The additive `20261014090000_complete_modules` migration adds editable categories, review moderation, audit history, recovery tokens, persistent rate limits and session revocation. Apply migrations to each environment before serving this version.
 
-Image uploads require `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET`. Uploads go through the authenticated server and use boutique-specific asset paths. The live upload endpoint does not require a signed upload preset. Recommendations use database availability and full-period quotes; Gemini is optional and requires both `GEMINI_API_KEY` and `GEMINI_MODEL`.
+`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY` and `CLOUDINARY_API_SECRET` enable authenticated boutique image uploads. `GEMINI_API_KEY` and `GEMINI_MODEL` enable AI preference interpretation; recommendations still enforce real inventory, availability and budget constraints. Missing or failed Gemini calls use deterministic rules.
 
-## Try the complete flow
+## Administrator and Gmail sending
 
-1. Register a customer at `/register`, then sign in at `/login`.
-2. Start with **Boutique registration** on the home page and use a separate owner account. New owners create an account and continue to `/boutique/register`; existing accounts can sign in to continue. Submitting the boutique application opens the login page. Owner login then opens `/boutique/dashboard`. Its application starts as `PENDING`, so management remains unavailable until approval.
-3. A trusted operator must provision an existing account with `User.role = ADMIN` in the database. Admin role cannot be requested during public registration. Sign in as that admin and review `/admin/boutiques`.
-4. After approval, the owner can add products at `/boutique/products/new`. The current inventory form creates one size per listing, with quantity and daily INR pricing. Images are optional.
-5. The published product appears in `/marketplace` and on the home page. As the customer, select its size, quantity, pickup and return times, then place the order.
-6. The request appears as `PENDING` at `/boutique/bookings`. The owner can confirm or reject it, record pickup and return, inspect it, then complete it. Inspection is required before completion.
-7. `/my-rentals` reads the same booking records and refreshes every 30 seconds, on window focus, or with the refresh button. Customer cancellation is available while the booking is pending or confirmed.
+The configured administrator is `mladybuglore@gmail.com`. Public registration cannot request an administrator role. Provisioning is a trusted local/deployment command:
 
-Payment collection is outside this implementation. Customers arrange payment and pickup with the boutique. The boutique can record manual deposit-refund status; that operation does not move money.
+```powershell
+npm.cmd run admin:provision
+# For a new administrator without an existing account:
+npm.cmd run admin:provision -- --create
+```
 
-## API routes
+The creation command writes the generated initial password to ignored `.tmp/admin-credentials.txt`, without printing it or overwriting an existing credential file. Promotion of an existing account keeps its password and invalidates existing sessions. Boutique owners must use a separate administrator account. Sign in at `/login?intent=admin`, change the initial password at `/change-password`, and review applications at `/admin/boutiques`.
+
+No custom email domain is required. To send from the existing Gmail address, use:
+
+```dotenv
+ADMIN_EMAIL=mladybuglore@gmail.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=mladybuglore@gmail.com
+SMTP_PASSWORD=
+EMAIL_FROM=mladybuglore@gmail.com
+APP_URL=http://localhost:3000
+REQUIRE_EMAIL_VERIFICATION=false
+```
+
+Fill `SMTP_PASSWORD` locally with a Google **app password**, never the regular Gmail password. Enable Google 2-Step Verification and generate an app password as described in [Google's instructions](https://support.google.com/accounts/answer/185833?hl=en). Keep the value out of chat and Git, and restart the server after changing environment variables. `EMAIL_FROM` accepts a plain email address and defaults to `SMTP_USER`.
+
+Approval/rejection/reopening commits to PostgreSQL before an optional email is attempted. A mail failure does not reverse the decision. The admin screen reports delivery status, and owners can always see their status after signing in. Recovery emails require working SMTP and a valid `APP_URL`; reset and verification tokens expire and are single-use. Keep verification optional until email delivery has been tested.
+
+## Connected journeys
+
+1. Register a customer at `/register`, sign in and edit `/profile`. Browse `/marketplace` or `/boutiques`, filter products, save a wishlist and explore `/styling`.
+2. Start **Boutique registration** from the home page using a separate owner account. Submit `/boutique/register`, then sign in to see the pending application. Management is available after admin approval; pending owners may edit `/boutique/settings`.
+3. The administrator approves or rejects `/admin/boutiques`, manages accounts and categories, archives products, moderates reviews and monitors actual bookings/activity.
+4. Approved owners create/edit/archive products, upload gallery images, set stock and daily or per-rental prices, and edit their public storefront profile.
+5. Customers select size, quantity and pickup/return times. **Check availability** returns a dated quote. Booking submission rechecks stock and authoritative prices within a serializable transaction.
+6. Requests appear at `/boutique/bookings`; owners confirm/reject, record pickup and return, inspect the items, and complete the rental. Customer `/my-rentals` tracks the same records and includes rental history.
+7. Customers with completed rentals can leave one review per rented product/booking. Public ratings exclude reviews hidden by moderators.
+
+The inventory editor currently creates one size per listing, with a quantity for that size. Payment collection is arranged with the boutique. Manual refund records track status but do not move money; no payment gateway is configured.
+
+## API contracts
+
+All authenticated data is private and uncached. Writes validate origin, role, ownership and input; record versions prevent stale edits.
 
 | Route | Methods | Access and behavior |
 | --- | --- | --- |
-| `/api/products` | GET | Public catalog of approved boutiques with active owners and unarchived products. `?id=...` reads one listing. |
-| `/api/bookings` | GET, POST, PATCH | Customer's rental history, create a request, or cancel their pending/confirmed request. |
-| `/api/profile` | GET, PATCH | Authenticated account details; update name and phone. |
-| `/api/wishlist` | GET, POST, DELETE | Customer's saved product IDs; add/remove with `{ productId }`. |
-| `/api/boutique/application` | GET, POST | Read or submit the signed-in account's application. Rejected applications can be resubmitted. |
-| `/api/admin/boutiques` | GET, PATCH | Admin-only pending applications and approval/rejection. |
-| `/api/boutique/products` | GET, POST, PUT, PATCH | Approved owner's inventory, create/edit, or archive/unarchive. `?id=...` reads one product. |
-| `/api/boutique/images` | POST | Approved owner's multipart image upload (`files`, optional `productId`). |
-| `/api/boutique/bookings` | GET, PATCH | Approved owner's bookings and lifecycle updates. Supports `id`, `search`, and `status` query parameters. |
-| `/api/boutique/calendar` | GET | Owner's rental calendar; `?month=YYYY-MM`. |
-| `/api/boutique/dashboard` | GET | Owner's inventory, booking totals, upcoming handovers, and completed rental revenue. |
-| `/api/boutique/analytics` | GET | Owner's reporting dataset from persisted bookings. |
-| `/api/recommendations` | POST | Existing recommendation contract, now backed by approved inventory and reservation checks. |
+| `/api/register` | POST | Customer or boutique owner account creation, bcrypt password hashing and rate limiting; cannot set ADMIN. |
+| `/api/auth/[...nextauth]` | GET, POST | Auth.js credentials sessions and optional Google OAuth. |
+| `/api/profile` | GET, PATCH | Authenticated profile; update name/phone. |
+| `/api/profile/password` | PATCH | Verify current password, change password and revoke existing sessions. |
+| `/api/auth/forgot-password`, `/api/auth/verification-email` | POST | Rate-limited outgoing recovery/verification links. |
+| `/api/auth/reset-password`, `/api/auth/verify-email` | POST | Consume purpose-bound, hashed, expiring, single-use tokens. |
+| `/api/categories` | GET | Active categories shared by marketplace and inventory editor. |
+| `/api/products` | GET | Public approved/active inventory; `id` reads one product. |
+| `/api/boutiques`, `/api/boutiques/[id]` | GET | Approved public storefronts and profile data; no private owner fields. |
+| `/api/availability` | GET | Date-specific variant availability and server-calculated price quote. |
+| `/api/bookings` | GET, POST, PATCH | Customer rental history, create a request or cancel pending/confirmed bookings. |
+| `/api/wishlist` | GET, POST, DELETE | Customer's saved product IDs; mutation body `{productId}`. |
+| `/api/reviews` | GET, POST | Public visible reviews and ratings; eligible completed-rental customer review submission. |
+| `/api/recommendations` | POST | Occasion styling against database inventory; Gemini preference interpretation with rules fallback. |
+| `/api/boutique/application` | GET, POST | Signed-in owner's application; rejected applications may be resubmitted. |
+| `/api/boutique/settings` | GET, PATCH | Owner profile/settings; cannot set ownership, approval or reviewer fields. |
+| `/api/boutique/products` | GET, POST, PUT, PATCH | Approved owner's inventory, create/edit and archive/unarchive. |
+| `/api/boutique/images` | POST | Approved owner's verified Cloudinary image upload. |
+| `/api/boutique/bookings` | GET, PATCH | Approved owner's requests and full rental lifecycle. |
+| `/api/boutique/calendar` | GET | Persisted booking calendar, with `month=YYYY-MM`. |
+| `/api/boutique/dashboard`, `/api/boutique/analytics` | GET | Actual inventory, bookings, revenue and product popularity. |
+| `/api/admin/dashboard`, `/api/admin/bookings`, `/api/admin/activity` | GET | Admin-only real totals, bookings and audit/activity monitoring. |
+| `/api/admin/users` | GET, PATCH | Admin-only activation/deactivation, with session revocation and self/last-admin safeguards. |
+| `/api/admin/boutiques` | GET, PATCH | Admin-only paginated registration management and optional owner notifications. |
+| `/api/admin/products` | GET, PATCH | Admin-only product moderation, version checked and audited. |
+| `/api/admin/categories` | GET, POST, PATCH | Admin-only editable categories, slugs and active status. |
+| `/api/admin/reviews` | GET, PATCH | Admin-only hide/restore reviews with a moderation reason. |
+| `/api/health` | GET | Request-time database health without configuration details. |
 
-Create an order with:
+Catalog filters: `search`, `category` (slug/ID or legacy name), `occasion`, `colour`, `size`, `minPrice`, `maxPrice`, `sort`, `boutiqueId`, `page`, `pageSize`. Price filters use rupees. With `page` or `paged=1`, results include `{items,total,page,pageSize,totalPages,facets}`. Without paging, the legacy array response is retained for existing home/wishlist consumers. Product detail includes gallery images, variant IDs, prices, deposits, rating counts and public boutique details. Admin resources return `{items,total,page,pageSize,pages}`.
+
+Availability parameters and booking creation body use the same rental fields:
 
 ```json
 {
@@ -64,31 +107,38 @@ Create an order with:
 }
 ```
 
-The server derives the customer, boutique, prices and product snapshots. Money responses use integer paise for `rentalMinor` and `depositMinor`. The catalog's `price` field is rupees for display. Per-day rates round partial days up; per-rental rates are charged once per unit. Pickup must be in the future, return must follow pickup, and rentals may span up to 90 days. Intervals are pickup-inclusive and return-exclusive.
+`GET /api/availability` takes these as query parameters and returns availability, free units, rental days and integer-paise rental/deposit/total prices. `POST /api/bookings` takes JSON, deriving customer, boutique and price snapshots on the server. Pickup must be future, return must follow pickup, and the interval is limited to 90 days. Daily pricing rounds partial days up; per-rental pricing charges once per unit. Pending, confirmed and picked-up bookings reserve stock. Reservations are pickup-inclusive/return-exclusive, and capacity uses peak simultaneous reservations. A quote is informational; booking creation always rechecks and can return 409 after another customer reserves the stock.
 
-Pending and confirmed requests, plus picked-up rentals, reserve stock for their intervals. Serializable booking transactions prevent simultaneous requests from claiming the final unit. Rejected/cancelled requests release their reservations. Responses return `409` when stock or the submitted record version conflicts; clients should reload before retrying.
+Booking lifecycle writes use `{id,version,command}`. Product creation uses `{input}`, editing `{id,version,input}`, archiving `{id,version,archived}`. Review creation uses `{bookingId,productId,rating,comment}`. Boutique decisions use `{id,version,status,reason?}` and return the updated record with `notification.status` (`sent`, `not_configured` or `failed`).
 
-Boutique lifecycle requests use `{ id, version, command }`, for example `command: { action: "CONFIRM" }`. Rejection/cancellation require a reason. Inspection and manual refund commands use the schemas in `booking-management/lifecycle.ts`. Product mutations use `{ input }` for creation, `{ id, version, input }` for editing, and `{ id, version, archived }` for archiving. Ownership is checked on the server, and archived products retain their booking history.
-
-The existing `/admin`, `/admin/products`, `/admin/bookings`, `/admin/customers`, and `/admin/analytics` overview screens still contain sample data; use `/admin/boutiques` for the implemented approval workflow. They are separate from the connected boutique workspace. The existing boutique settings placeholder is also unchanged.
-
-## Verification
+## Verification and deployment
 
 ```powershell
 npm.cmd test
 npm.cmd run lint
 npx.cmd tsc --noEmit --incremental false
 npm.cmd run build
+npm.cmd run check:local
 ```
 
-The integration test creates and removes its own accounts, boutiques, products and orders. Run it only against a disposable migrated local database, with an app pointed at the same database:
+The integration suites create and remove fixtures. Use only a disposable, migrated PostgreSQL database and an app pointing to that same database. Disable SMTP and Google sign-in on the test app to avoid external side effects:
 
 ```powershell
 $env:DATABASE_URL='postgresql://test-user:test-password@127.0.0.1:5432/rentique_test'
-$env:RENTIQUE_TEST_URL='http://127.0.0.1:3100'
+$env:AUTH_SECRET='isolated-test-secret-at-least-32-characters'
+$env:AUTH_TRUST_HOST='true'
+$env:SMTP_PASSWORD=''
+$env:AUTH_GOOGLE_ID=''
+$env:AUTH_GOOGLE_SECRET=''
+$env:REQUIRE_EMAIL_VERIFICATION='false'
+npm.cmd run db:migrate
+npm.cmd run build
+npm.cmd run start -- --hostname 127.0.0.1 --port 3101
+# In a second terminal, using the same test database:
+$env:RENTIQUE_TEST_URL='http://127.0.0.1:3101'
 npm.cmd run test:integration
 ```
 
-The local app also needs a valid `AUTH_SECRET`; start it on port 3100 with `AUTH_TRUST_HOST=true` when testing locally. The test checks actual credential sessions, role/ownership checks, approval, inventory publishing, persistent wishlist changes, authoritative prices, simultaneous stock claims, recommendations, lifecycle transitions, dashboard totals, customer history, cancellation, and archiving.
+Verified: 56 service/rule/security tests, both full HTTP integration suites against the production server, TypeScript, ESLint and production build. Integration covers sessions, role redirects, approval/rejection, ownership, filters, storefronts/settings, quotes/stock conflicts, wishlist, complete rental lifecycle, review eligibility/moderation, category management, account/session revocation, recovery-token expiry/replay and rate limits. Previous live provider checks verified a temporary Cloudinary upload/gallery/CDN asset (removed afterward) and Gemini structured output. Browser click/visual testing was unavailable because no browser session was connected. Gmail delivery remains unverified until the app password is configured.
 
-Validation performed: 48 service/rule tests passed; database-backed HTTP integration passed against both development and production servers; production build, TypeScript, and diff checks passed. Lint has one pre-existing unused-import warning in `/admin/page.tsx`. HTTP smoke checks returned 200 for customer and boutique pages. Visual browser testing was unavailable because no browser session was connected. External Cloudinary uploads and Gemini calls were not exercised.
+Before deploying, configure the host's server-side environment variables and set `APP_URL` to the real HTTPS origin (and `AUTH_URL` if explicitly used). Google OAuth redirect URLs must match that origin. Run `npm run db:generate`, `npm run db:migrate`, `npm run check:deployment`, then build/start. The deployment checker is read-only and checks schema/migrations, the configured administrator, database connectivity, secret placement and provider configuration. A local HTTP URL intentionally fails the production URL check. Choose a production host and configure backups/monitoring separately; this checkout has not been published.

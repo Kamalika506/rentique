@@ -2,16 +2,50 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ApiError, currentUser, ownedBoutique } from "@/lib/api";
 import { bookingInclude, bookingRecord, catalogProduct, categoryMap, managementProduct, productInclude } from "./records";
-import { allowedActions, lineAmounts, rentalDays, reservingStatuses } from "./rules";
+import { allowedActions, lineAmounts, rentalDays } from "./rules";
 import { productInputSchema } from "../boutiques/inventory/schema";
 import { lifecycleCommandSchema } from "../boutiques/booking-management/lifecycle";
 import type { Prisma } from "@/generated/prisma/client";
+import { reservedUnits } from "./availability";
+import { resolveCategory } from "@/features/admin/categories";
 
 export async function catalog(request: Request) {
-  const id = new URL(request.url).searchParams.get("id");
-  const products = await prisma.product.findMany({ where: { ...(id ? { id } : {}), archived: false, boutique: { status: "APPROVED", owner: { isActive: true } } }, include: productInclude, orderBy: { createdAt: "desc" } });
-  if (id && !products.length) throw new ApiError(404, "Product unavailable.");
-  return id ? catalogProduct(products[0]) : products.map(catalogProduct);
+  const params = new URL(request.url).searchParams, id = params.get("id");
+  const conditions: Prisma.ProductWhereInput[] = [{ archived: false, boutique: { status: "APPROVED", owner: { isActive: true } }, OR: [{ categoryId: null }, { catalogCategory: { isActive: true } }] }];
+  if (id) conditions.push({ id });
+  if (params.get("boutiqueId")) conditions.push({ boutiqueId: params.get("boutiqueId")! });
+  const search = params.get("search")?.trim().slice(0, 120);
+  if (search) conditions.push({ OR: [{ name: { contains: search, mode: "insensitive" } }, { description: { contains: search, mode: "insensitive" } }, { boutique: { name: { contains: search, mode: "insensitive" } } }] });
+  const category = params.get("category");
+  if (category) {
+    const match = await prisma.category.findFirst({ where: { isActive: true, OR: [{ id: category }, { slug: category }, { name: { equals: category, mode: "insensitive" } }] } });
+    const legacy = Object.entries(categoryMap).find(([label, key]) => label.toLowerCase() === category.toLowerCase() || key === category)?.[1];
+    conditions.push(match ? { OR: [{ categoryId: match.id }, ...(match.legacyKey ? [{ categoryId: null, category: match.legacyKey }] : [])] } : legacy ? { category: legacy, categoryId: null } : { id: "" });
+  }
+  for (const [param, field] of [["occasion", "occasionTags"], ["colour", "colours"]] as const) {
+    const value = params.get(param)?.trim();
+    if (value) {
+      // PostgreSQL string arrays compare exactly; resolve case-insensitive UI input
+      // to the actual stored token so existing mixed-case tags remain searchable.
+      const rows = await prisma.product.findMany({ where: { AND: conditions }, select: { colours: true, occasionTags: true } });
+      const tags = [...new Set(rows.flatMap(row => row[field].filter(tag => tag.toLowerCase() === value.toLowerCase())))];
+      conditions.push({ [field]: { hasSome: tags } });
+    }
+  }
+  if (params.get("size")) conditions.push({ variants: { some: { archived: false, size: { equals: params.get("size")!, mode: "insensitive" } } } });
+  const money = (key: string) => params.has(key) ? BigInt(Math.round(z.coerce.number().finite().min(0).max(10000000).parse(params.get(key)) * 100)) : undefined;
+  const minPrice = money("minPrice"), maxPrice = money("maxPrice");
+  if (minPrice !== undefined || maxPrice !== undefined) conditions.push({ rentalPriceMinor: { gte: minPrice, lte: maxPrice } });
+  const where: Prisma.ProductWhereInput = { AND: conditions };
+  const sort = params.get("sort"), orderBy: Prisma.ProductOrderByWithRelationInput[] = sort === "price-low" ? [{ rentalPriceMinor: "asc" }, { id: "asc" }] : sort === "price-high" ? [{ rentalPriceMinor: "desc" }, { id: "asc" }] : sort === "name" ? [{ name: "asc" }, { id: "asc" }] : [{ createdAt: "desc" }, { id: "asc" }];
+  if (id) { const product = await prisma.product.findFirst({ where, include: productInclude }); if (!product) throw new ApiError(404, "Product unavailable."); return catalogProduct(product); }
+  if (!params.has("page") && params.get("paged") !== "1") return (await prisma.product.findMany({ where, include: productInclude, orderBy, take: 1000 })).map(catalogProduct);
+  const page = z.coerce.number().int().min(1).max(100000).parse(params.get("page") ?? 1), pageSize = z.coerce.number().int().min(1).max(50).parse(params.get("pageSize") ?? 12);
+  const [products, total, tokens] = await Promise.all([
+    prisma.product.findMany({ where, include: productInclude, orderBy, skip: (page - 1) * pageSize, take: pageSize }), prisma.product.count({ where }),
+    prisma.product.findMany({ where: conditions[0], select: { colours: true, occasionTags: true, variants: { where: { archived: false }, select: { size: true } } }, take: 2000 }),
+  ]);
+  return { items: products.map(catalogProduct), total, page, pageSize, totalPages: Math.ceil(total / pageSize), facets: { occasions: [...new Set(tokens.flatMap(p => p.occasionTags))].sort(), colours: [...new Set(tokens.flatMap(p => p.colours))].sort(), sizes: [...new Set(tokens.flatMap(p => p.variants.map(v => v.size)))].sort() } };
 }
 const bookingSchema = z.object({ variantId: z.string().min(1), quantity: z.number().int().min(1).max(100), pickupAt: z.string().datetime({ offset: true }), returnAt: z.string().datetime({ offset: true }) });
 export async function createBooking(request: Request) {
@@ -21,11 +55,11 @@ export async function createBooking(request: Request) {
   let days: number;
   try { days = rentalDays(pickupAt, returnAt); } catch (error) { throw new ApiError(400, (error as Error).message); }
   return prisma.$transaction(async tx => {
-    const variant = await tx.productVariant.findFirst({ where: { id: input.variantId, archived: false, product: { archived: false, boutique: { status: "APPROVED", owner: { isActive: true } } } }, include: { product: true } });
+    const variant = await tx.productVariant.findFirst({ where: { id: input.variantId, archived: false, product: { archived: false, boutique: { status: "APPROVED", owner: { isActive: true } }, OR: [{ categoryId: null }, { catalogCategory: { isActive: true } }] } }, include: { product: true } });
     if (!variant) throw new ApiError(404, "Product or size unavailable.");
     // Serializability protects simultaneous requests for the final unit.
-    const reserved = await tx.bookingItem.aggregate({ where: { variantId: variant.id, booking: { status: { in: reservingStatuses }, pickupAt: { lt: returnAt }, returnAt: { gt: pickupAt } } }, _sum: { quantity: true } });
-    if (input.quantity + (reserved._sum.quantity ?? 0) > variant.quantity) throw new ApiError(409, "This size is unavailable for the selected dates. Choose different dates or a smaller quantity.");
+    const reserved = await reservedUnits(tx, variant.id, pickupAt, returnAt);
+    if (input.quantity + reserved > variant.quantity) throw new ApiError(409, "This size is unavailable for the selected dates. Choose different dates or a smaller quantity.");
     const amounts = lineAmounts(variant.rentalPriceMinor ?? variant.product.rentalPriceMinor, variant.depositMinor ?? variant.product.depositMinor, variant.product.rentalPriceUnit, days, input.quantity);
     const booking = await tx.booking.create({ data: { customerId: user.id, boutiqueId: variant.product.boutiqueId, pickupAt, returnAt, ...amounts,
       items: { create: { variantId: variant.id, quantity: input.quantity, productNameSnap: variant.product.name, sizeSnapshot: variant.size, categorySnapshot: variant.product.category, ...amounts } },
@@ -102,9 +136,10 @@ export async function saveProduct(request: Request) {
   const { boutique } = await ownedBoutique();
   const body = z.object({ input: productInputSchema, id: z.string().optional(), version: z.number().int().positive().optional() }).parse(await request.json());
   const input = body.input;
+  const category = await resolveCategory(input.category);
   if (input.images.some(image => image.source !== "cloudinary" || !image.publicId.startsWith(`rentique/${boutique.id}/`) || !image.secureUrl.startsWith(`https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload/`))) throw new ApiError(400, "Use images uploaded by your boutique.");
   const images = input.images.map((image, position) => { if (image.source !== "cloudinary") throw new ApiError(400, "Invalid image."); return { publicId: image.publicId, secureUrl: image.secureUrl, alt: image.alt, position }; });
-  const fields = { name: input.name, description: input.description, category: categoryMap[input.category], occasionTags: input.occasionTags, colours: input.colours, fabricStyle: input.fabricStyle, rentalPriceMinor: BigInt(input.rentalPriceMinor), depositMinor: BigInt(input.depositMinor) };
+  const fields = { name: input.name, description: input.description, category: category.legacyKey ?? "OTHER" as const, categoryId: category.id, rentalPriceUnit: input.rentalPriceUnit ?? "PER_DAY" as const, occasionTags: input.occasionTags, colours: input.colours, fabricStyle: input.fabricStyle, rentalPriceMinor: BigInt(input.rentalPriceMinor), depositMinor: BigInt(input.depositMinor) };
   if (request.method === "POST") return managementProduct(await prisma.product.create({ data: { ...fields, boutiqueId: boutique.id, variants: { create: { size: input.size, quantity: input.quantity } }, images: { create: images } }, include: productInclude }));
   const { id, version } = z.object({ id: z.string(), version: z.number().int().positive() }).parse(body);
   return prisma.$transaction(async tx => {

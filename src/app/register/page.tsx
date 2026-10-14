@@ -45,7 +45,7 @@ function RegisterForm() {
 
     setBusy(true);
     try {
-      await api("/api/register", jsonRequest("POST", { name, email, password }));
+      const registration = await api<{ verificationEmailSent: boolean }>("/api/register", jsonRequest("POST", { name, email, password }));
       if (boutiqueIntent) {
         const result = await signIn("credentials", { email: email.trim().toLowerCase(), password, redirect: false });
         if (result?.error) { setMessage("Account created. Sign in below to continue boutique registration."); return; }
@@ -54,7 +54,7 @@ function RegisterForm() {
         router.refresh();
         return;
       }
-      setMessage("Account created. You can now sign in.");
+      setMessage(registration.verificationEmailSent ? "Account created. Check your email for a verification link, then sign in." : "Account created. You can now sign in.");
       setPassword(""); setConfirmPassword("");
     } catch (error) { setError(error instanceof Error ? error.message : "Registration failed."); }
     finally { setBusy(false); }

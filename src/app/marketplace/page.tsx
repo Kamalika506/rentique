@@ -1,318 +1,74 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowDownUp, ArrowRight,Heart, Search, SlidersHorizontal } from "lucide-react";
+import { Search } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
-import { useCatalog } from "@/features/marketplace/catalog";
-import { useWishlist } from "@/features/marketplace/wishlist-provider";
+import type { CatalogPage } from "@/features/marketplace/catalog";
+import { ProductCard } from "@/features/marketplace/product-card";
+import { api } from "@/lib/api-client";
 
-const categories = ["Bridal", "Ethnic wear", "Occasion wear", "Western wear", "Accessories"];
+type Category = { id: string; slug: string; name: string; legacyKey: string | null; isActive: boolean };
+const inputClass = "mt-2 h-12 w-full rounded-xl border border-[#d9d1c9] bg-white px-3 text-sm outline-none focus:border-[#4c2544]";
 
 export default function MarketplacePage() {
-  const { products, loading, error } = useCatalog();
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All categories");
-  const [maxPrice, setMaxPrice] = useState("all");
-  const [sortBy, setSortBy] = useState("recommended");
-  const { toggleWishlist, isWishlisted, isLoaded } = useWishlist();
+  return <Suspense fallback={<main className="p-8" role="status">Loading marketplace…</main>}><Marketplace /></Suspense>;
+}
 
-  const filteredProducts = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    const results = products.filter((product) => {
-      const matchesSearch =
-        !query ||
-        product.name.toLowerCase().includes(query) ||
-        product.collection.toLowerCase().includes(query) ||
-        product.category.toLowerCase().includes(query);
-
-      const matchesCategory =
-        category === "All categories" || product.category === category;
-
-      const matchesPrice =
-        maxPrice === "all" || product.price <= Number(maxPrice);
-
-      return matchesSearch && matchesCategory && matchesPrice;
-    });
-
-    return [...results].sort((a, b) => {
-      if (sortBy === "price-low") return a.price - b.price;
-      if (sortBy === "price-high") return b.price - a.price;
-      if (sortBy === "name") return a.name.localeCompare(b.name);
-      return 0;
-    });
-  }, [products, search, category, maxPrice, sortBy]);
-
-  function clearFilters() {
-    setSearch("");
-    setCategory("All categories");
-    setMaxPrice("all");
-    setSortBy("recommended");
+function Marketplace() {
+  const params = useSearchParams(), router = useRouter();
+  const query = params.toString();
+  const [response, setResponse] = useState<{ query: string; catalog: CatalogPage | null; error: string } | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryError, setCategoryError] = useState("");
+  const loading = response?.query !== query;
+  const catalog = loading ? null : response?.catalog;
+  const error = loading ? "" : response?.error;
+  useEffect(() => {
+    const controller = new AbortController();
+    const next = new URLSearchParams(query); next.set("paged", "1"); next.set("pageSize", "12");
+    api<CatalogPage>(`/api/products?${next}`, { signal: controller.signal }).then(catalog => { if (!controller.signal.aborted) setResponse({ query, catalog, error: "" }); }).catch(error => { if (!controller.signal.aborted) setResponse({ query, catalog: null, error: error instanceof Error ? error.message : "Products could not be loaded." }); });
+    return () => controller.abort();
+  }, [query]);
+  useEffect(() => {
+    const controller = new AbortController();
+    api<Category[]>("/api/categories", { signal: controller.signal }).then(items => setCategories(items.filter(item => item.isActive))).catch(error => { if (!controller.signal.aborted) setCategoryError(error instanceof Error ? error.message : "Categories unavailable."); });
+    return () => controller.abort();
+  }, []);
+  function applyFilters(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget), next = new URLSearchParams();
+    for (const [key, value] of data.entries()) if (typeof value === "string" && value.trim()) next.set(key, value.trim());
+    const boutiqueId = params.get("boutiqueId"); if (boutiqueId) next.set("boutiqueId", boutiqueId);
+    next.set("page", "1"); router.push(`/marketplace?${next}`, { scroll: false });
   }
-
-  return (
-    <div className="flex min-h-screen flex-col bg-[#f7f5f1] text-[#302d31]">
-      <CustomerHeader />
-
-      <main className="flex-1">
-        <section className="border-b border-[#e4dfd7] bg-[#eee7e5]">
-          <div className="mx-auto max-w-7xl px-5 py-12 sm:px-8 sm:py-16">
-            <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#927c59]">
-              The Rentique collection
-            </p>
-
-            <h1 className="mt-3 font-serif text-4xl leading-tight tracking-tight text-[#4c2544] sm:text-5xl">
-              Find your next favourite look.
-            </h1>
-
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-[#716971] sm:text-base">
-              Explore styles for celebrations, evenings, and everyday moments.
-              Search the collection and find a look that feels like you.
-            </p>
-
-            <p className="mt-4 text-xs text-[#716971]">
-              Browse collections from approved boutiques and request your rental dates.
-            </p>
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-12">
-          <div className="grid gap-4 rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-4 sm:p-5 lg:grid-cols-[1.5fr_1fr_1fr_1fr] lg:items-end">
-            <div>
-              <label
-                htmlFor="marketplace-search"
-                className="mb-2 block text-sm font-medium text-[#302d31]"
-              >
-                Search styles
-              </label>
-
-              <div className="flex h-12 items-center gap-3 rounded-xl border border-[#d9d1c9] bg-white px-3 focus-within:border-[#4c2544] focus-within:ring-2 focus-within:ring-[#4c2544]/10">
-                <Search size={18} className="shrink-0 text-[#927c59]" />
-                <input
-                  id="marketplace-search"
-                  type="search"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Try evening or occasion"
-                  className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#a49ba2]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label
-                htmlFor="category-filter"
-                className="mb-2 block text-sm font-medium text-[#302d31]"
-              >
-                Category
-              </label>
-              <select
-                id="category-filter"
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-                className="h-12 w-full rounded-xl border border-[#d9d1c9] bg-white px-3 text-sm outline-none focus:border-[#4c2544] focus:ring-2 focus:ring-[#4c2544]/10"
-              >
-                <option>All categories</option>
-                {categories.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="price-filter"
-                className="mb-2 block text-sm font-medium text-[#302d31]"
-              >
-                Maximum rental price
-              </label>
-              <select
-                id="price-filter"
-                value={maxPrice}
-                onChange={(event) => setMaxPrice(event.target.value)}
-                className="h-12 w-full rounded-xl border border-[#d9d1c9] bg-white px-3 text-sm outline-none focus:border-[#4c2544] focus:ring-2 focus:ring-[#4c2544]/10"
-              >
-                <option value="all">Any price</option>
-                <option value="1000">Up to ₹1,000</option>
-                <option value="1250">Up to ₹1,250</option>
-                <option value="1500">Up to ₹1,500</option>
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="sort-products"
-                className="mb-2 block text-sm font-medium text-[#302d31]"
-              >
-                Sort by
-              </label>
-              <select
-                id="sort-products"
-                value={sortBy}
-                onChange={(event) => setSortBy(event.target.value)}
-                className="h-12 w-full rounded-xl border border-[#d9d1c9] bg-white px-3 text-sm outline-none focus:border-[#4c2544] focus:ring-2 focus:ring-[#4c2544]/10"
-              >
-                <option value="recommended">Recommended</option>
-                <option value="price-low">Price: low to high</option>
-                <option value="price-high">Price: high to low</option>
-                <option value="name">Name: A to Z</option>
-              </select>
-            </div>
-
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="text-left text-sm font-medium text-[#4c2544] underline underline-offset-4 hover:text-[#927c59] lg:col-span-4 lg:justify-self-end"
-            >
-              Clear all filters
-            </button>
-          </div>
-
-          <div className="mb-6 mt-8 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="font-serif text-2xl text-[#4c2544] sm:text-3xl">
-                Explore the collection
-              </h2>
-              <p className="mt-2 text-sm text-[#716971]" aria-live="polite">
-                {filteredProducts.length}{" "}
-                {filteredProducts.length === 1 ? "style" : "styles"} found
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs text-[#716971]">
-              <SlidersHorizontal size={16} />
-              <ArrowDownUp size={15} />
-              Filters update instantly
-            </div>
-          </div>
-
-          {loading ? <p role="status">Loading boutique collections?</p> : error ? <p role="alert">{error}</p> : filteredProducts.length > 0 ? (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredProducts.map((product) => {
-                const wishlisted = isWishlisted(product.id);
-
-                return (
-                  <article
-                    key={product.id}
-                    className="overflow-hidden rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] transition hover:-translate-y-0.5 hover:shadow-md"
-                  >
-                    <div className="relative">
-                      <Link
-                        href={`/marketplace/${product.id}`}
-                        aria-label={`View details for ${product.name}`}
-                        className="group block"
-                >
-                        <div
-                          role="img"
-                          aria-label={`Fashion image for ${product.name}`}
-                          className="relative aspect-[4/5] bg-[#eee7e5] bg-cover bg-center"
-                          style={{
-                            backgroundImage: `url('${product.image}')`,
-                          }}
-                        >
-                          <span className="absolute left-3 top-3 rounded-full bg-[#fffdf9]/95 px-3 py-1.5 text-xs font-medium text-[#4c2544]">
-                            Boutique listing
-                          </span>
-                        </div>
-                      </Link>
-
-                      <button
-                        type="button"
-                        onClick={() => toggleWishlist(product.id)}
-                        aria-label={
-                          wishlisted
-                            ? `Remove ${product.name} from wishlist`
-                            : `Add ${product.name} to wishlist`
-                        }
-                        aria-pressed={wishlisted}
-                        disabled={!isLoaded}
-                        className="absolute right-3 top-3 z-10 flex size-11 items-center justify-center rounded-full bg-[#fffdf9]/95 text-[#4c2544] shadow-sm transition hover:bg-white disabled:opacity-60"
-                      >
-                        <Heart
-                          size={20}
-                          fill={wishlisted ? "currentColor" : "none"}
-                          className={wishlisted ? "text-[#4c2544]" : ""}
-                        />
-                      </button>
-                    </div>
-
-                    <Link
-                      href={`/marketplace/${product.id}`}
-                      aria-label={`View details for ${product.name}`}
-                      className="group block"
-                    >
-                      <div className="p-5">
-                        <p className="text-xs uppercase tracking-[0.12em] text-[#927c59]">
-                          {product.category}
-                        </p>
-
-                        <h3 className="mt-2 font-serif text-2xl text-[#4c2544] group-hover:text-[#927c59]">
-                          {product.name}
-                        </h3>
-
-                        <p className="mt-1 text-sm text-[#716971]">
-                          {product.collection}
-                        </p>
-
-                        <p className="mt-3 text-sm leading-6 text-[#716971]">
-                          {product.description}
-                        </p>
-
-                        <div className="mt-5 flex items-end justify-between gap-3 border-t border-[#e4dfd7] pt-4">
-                          <div>
-                            <p className="text-xs text-[#716971]">
-                              Rental price
-                            </p>
-                            <p className="mt-1 text-lg font-semibold text-[#302d31]">
-                              ₹{product.price.toLocaleString("en-IN")}
-                              <span className="text-xs font-normal text-[#716971]">
-                                {" "}/ {product.rentalPeriod}
-                              </span>
-                            </p>
-                          </div>
-
-                          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#f3efe9] text-[#4c2544] transition group-hover:bg-[#4c2544] group-hover:text-white">
-                            <ArrowRight size={18} />
-                          </span>
-                        </div>
-                      </div>
-                    </Link>
-                  </article>
-                );
-              })}
-
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-dashed border-[#d9d1c9] bg-[#fffdf9] px-5 py-14 text-center">
-              <Search size={28} className="mx-auto text-[#927c59]" />
-              <h3 className="mt-4 font-serif text-2xl text-[#4c2544]">
-                No styles found
-              </h3>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#716971]">
-                Try another search, choose a different category, or increase
-                your maximum rental price.
-              </p>
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-[#4c2544] px-6 text-sm font-medium text-white hover:bg-[#633358]"
-              >
-                Clear filters
-              </button>
-            </div>
-          )}
-
-          <p className="mt-8 text-xs leading-5 text-[#8a8188]">
-            Availability is checked for your selected size and rental dates when you place an order.
-          </p>
-        </section>
-      </main>
-
-      <CustomerFooter />
-    </div>
-  );
+  function pageLink(page: number) { const next = new URLSearchParams(query); next.set("page", String(page)); return `/marketplace?${next}`; }
+  const facets = catalog?.facets ?? { occasions: [], colours: [], sizes: [] };
+  function choices(values: string[], current: string) { return [...new Set([...values, ...(current ? [current] : [])])]; }
+  const currentCategory = params.get("category") ?? "";
+  return <div className="flex min-h-screen flex-col bg-[#f7f5f1] text-[#302d31]">
+    <CustomerHeader />
+    <main className="flex-1">
+      <section className="border-b border-[#e4dfd7] bg-[#eee7e5]"><div className="mx-auto max-w-7xl px-5 py-12 sm:px-8"><p className="text-xs uppercase tracking-[0.18em] text-[#927c59]">The Rentique collection</p><h1 className="mt-3 font-serif text-4xl text-[#4c2544] sm:text-5xl">Find your next favourite look.</h1><p className="mt-4 max-w-2xl text-[#716971]">Browse approved boutiques and find a style for your occasion, size and budget.</p><Link href="/styling" className="mt-5 inline-block font-medium text-[#4c2544] underline underline-offset-4">Find a look with occasion styling</Link></div></section>
+      <section className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
+        <form key={query} onSubmit={applyFilters} className="grid gap-4 rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-5 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="text-sm font-medium">Search styles<input name="search" type="search" defaultValue={params.get("search") ?? ""} placeholder="Name, fabric or boutique" className={inputClass} /></label>
+          <label className="text-sm font-medium">Category<select name="category" defaultValue={currentCategory} className={inputClass}><option value="">All categories</option>{currentCategory && !categories.some(item => [item.id, item.slug, item.name, item.legacyKey].includes(currentCategory)) && <option value={currentCategory}>{currentCategory.replaceAll("_", " ")}</option>}{categories.map(item => <option key={item.id} value={[item.id, item.slug, item.name, item.legacyKey].includes(currentCategory) ? currentCategory : item.slug}>{item.name}</option>)}</select></label>
+          <label className="text-sm font-medium">Occasion<select name="occasion" defaultValue={params.get("occasion") ?? ""} className={inputClass}><option value="">All occasions</option>{choices(facets.occasions, params.get("occasion") ?? "").map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+          <label className="text-sm font-medium">Colour<select name="colour" defaultValue={params.get("colour") ?? ""} className={inputClass}><option value="">All colours</option>{choices(facets.colours, params.get("colour") ?? "").map(value => <option key={value} value={value}>{value}</option>)}</select></label>
+          <label className="text-sm font-medium">Size<select name="size" defaultValue={params.get("size") ?? ""} className={inputClass}><option value="">All sizes</option>{choices(facets.sizes, params.get("size") ?? "").map(value => <option key={value} value={value}>{value.replaceAll("_", " ")}</option>)}</select></label>
+          <label className="text-sm font-medium">Minimum rental price (₹)<input name="minPrice" type="number" min="0" step="0.01" defaultValue={params.get("minPrice") ?? ""} placeholder="Any" className={inputClass} /></label>
+          <label className="text-sm font-medium">Maximum rental price (₹)<input name="maxPrice" type="number" min="0" step="0.01" defaultValue={params.get("maxPrice") ?? ""} placeholder="Any" className={inputClass} /></label>
+          <label className="text-sm font-medium">Sort by<select name="sort" defaultValue={params.get("sort") ?? "recommended"} className={inputClass}><option value="recommended">Newest listings</option><option value="price-low">Price: low to high</option><option value="price-high">Price: high to low</option><option value="name">Name: A to Z</option></select></label>
+          <div className="flex flex-wrap items-center gap-4 sm:col-span-2 lg:col-span-4"><button type="submit" className="rounded-full bg-[#4c2544] px-6 py-3 text-sm font-medium text-white">Apply filters</button><Link href="/marketplace" className="text-sm text-[#4c2544] underline">Clear filters</Link><p className="text-xs text-[#716971]">Price filters use the listing rate. Select dates for a full rental quote.</p></div>
+          {categoryError && <p role="status" className="text-sm text-[#716971] sm:col-span-2 lg:col-span-4">Category filters could not be loaded. Search and other filters remain available.</p>}
+        </form>
+        <div className="mb-6 mt-8"><h2 className="font-serif text-2xl text-[#4c2544]">Explore the collection</h2><p className="mt-2 text-sm text-[#716971]" aria-live="polite">{loading ? "Loading styles…" : `${catalog?.total ?? 0} styles found`}</p></div>
+        {error ? <p role="alert" className="rounded-xl border bg-white p-5">{error}</p> : loading ? <p role="status">Loading boutique collections…</p> : catalog?.items.length ? <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{catalog.items.map(product => <ProductCard key={product.id} product={product} />)}</div> : <div className="rounded-2xl border border-dashed border-[#d9d1c9] bg-[#fffdf9] p-12 text-center"><Search size={28} className="mx-auto text-[#927c59]" /><h3 className="mt-4 font-serif text-2xl text-[#4c2544]">No styles found</h3><p className="mt-2 text-sm text-[#716971]">Try another occasion, size, category or price range.</p><Link href="/marketplace" className="mt-5 inline-block text-[#4c2544] underline">Clear filters</Link></div>}
+        {!loading && !error && catalog && catalog.totalPages > 1 && <nav aria-label="Product pages" className="mt-8 flex items-center justify-center gap-5">{catalog.page > 1 ? <Link href={pageLink(catalog.page - 1)} className="rounded-full border px-5 py-2">Previous</Link> : <span className="px-5 py-2 text-[#aaa]">Previous</span>}<p className="text-sm">Page {catalog.page} of {catalog.totalPages}</p>{catalog.page < catalog.totalPages ? <Link href={pageLink(catalog.page + 1)} className="rounded-full border px-5 py-2">Next</Link> : <span className="px-5 py-2 text-[#aaa]">Next</span>}</nav>}
+      </section>
+    </main><CustomerFooter />
+  </div>;
 }

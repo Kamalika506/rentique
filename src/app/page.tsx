@@ -9,18 +9,21 @@ import CustomerFooter from "@/components/layout/customer-footer";
 const categories = [
   {
     name: "Wedding guest",
+    occasion: "wedding",
     description: "Celebrate in style",
     image:
       "https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=800&q=85",
   },
   {
     name: "Evening wear",
+    occasion: "party",
     description: "Make an entrance",
     image:
       "https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=800&q=85",
   },
   {
     name: "Everyday chic",
+    occasion: "casual",
     description: "Effortlessly put together",
     image:
       "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=800&q=85",
@@ -177,7 +180,7 @@ export default function Home() {
             {categories.map((category, index) => (
               <Link
                 key={category.name}
-                href="/marketplace"
+                href={`/marketplace?occasion=${category.occasion}`}
                 className="group relative overflow-hidden rounded-2xl bg-[#e5d9dc]"
               >
                 <div
@@ -223,7 +226,7 @@ export default function Home() {
                   Looks worth going out for
                 </h2>
                 <p className="mt-3 text-sm leading-6 text-[#716971]">
-                  Sample products for the storefront preview.
+                  Discover rental products from approved local boutiques.
                 </p>
               </div>
               <Link

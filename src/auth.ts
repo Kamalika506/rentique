@@ -1,11 +1,12 @@
 import NextAuth from "next-auth";
-// import Google from "next-auth/providers/google";
+import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import { z } from "zod";
 
 import { prisma } from "@/lib/prisma";
+import { rateAllowed } from "@/lib/rate-limit";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
     adapter: PrismaAdapter(prisma),
@@ -16,6 +17,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
 
     providers: [
+        ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET ? [Google({ clientId: process.env.AUTH_GOOGLE_ID, clientSecret: process.env.AUTH_GOOGLE_SECRET })] : []),
 
         Credentials({
             name: "Email and Password",
@@ -36,6 +38,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 if (!parsed.success) return null;
 
                 const email = parsed.data.email.trim().toLowerCase();
+                if (!await rateAllowed("signin", email, 10, 10 * 60000)) return null;
 
                 const user = await prisma.user.findUnique({
                     where: { email },
@@ -44,6 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 if (!user || !user.passwordHash || !user.isActive) {
                     return null;
                 }
+                if (process.env.REQUIRE_EMAIL_VERIFICATION === "true" && !user.emailVerified) return null;
 
                 const validPassword = await compare(
                     parsed.data.password,
@@ -71,12 +75,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             if (token.sub) {
                 const dbUser = await prisma.user.findUnique({
                     where: { id: token.sub },
-                    select: { role: true, isActive: true },
+                    select: { role: true, isActive: true, sessionVersion: true },
                 });
 
                 if (!dbUser?.isActive) {
                     return null;
                 }
+                if (user?.id) token.sessionVersion = dbUser.sessionVersion;
+                if ((token.sessionVersion ?? 0) !== dbUser.sessionVersion) return null;
 
                 token.role = dbUser.role;
             }

@@ -1,5 +1,4 @@
 import { endpoint } from "@/lib/api";
-import { reviewApplications } from "@/features/rentals/workspace-server";
-
-export const GET = endpoint(reviewApplications);
-export const PATCH = endpoint(reviewApplications);
+import { boutiques } from "@/features/admin/server";
+export const GET = endpoint(boutiques);
+export const PATCH = endpoint(boutiques);

@@ -4,9 +4,10 @@ import Link from "next/link";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
 import { api, jsonRequest } from "@/lib/api-client";
+import { ReviewForm } from "@/features/marketplace/review-form";
 import { bookingDate, bookingMoney, bookingStatusLabels, type BoutiqueBooking } from "@/features/boutiques/booking-management/service";
 
-type Rental = BoutiqueBooking & { boutique: { name: string; phone: string; address: string; city: string } };
+type Rental = BoutiqueBooking & { boutique: { name: string; phone: string; address: string; city: string }; review?: { rating: number; isHidden: boolean } | null };
 export default function MyRentalsPage() {
   const [rentals, setRentals] = useState<Rental[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState("");
   const load = useCallback(() => api<Rental[]>("/api/bookings").then(data => { setRentals(data); setError(""); }).catch(error => setError(error.message)), []);
@@ -29,6 +30,8 @@ export default function MyRentalsPage() {
       <p className="mt-3">{booking.boutique.address}, {booking.boutique.city} ? {booking.boutique.phone}</p>
       {booking.rejectionReason && <p>Reason: {booking.rejectionReason}</p>}{booking.cancellationReason && <p>Cancellation: {booking.cancellationReason}</p>}{booking.manualRefund && <p>Deposit refund: {booking.manualRefund.status.replaceAll("_", " ")} ? {booking.manualRefund.notes}</p>}
       {["PENDING", "CONFIRMED"].includes(booking.status) && <button disabled={Boolean(busy)} onClick={() => void cancel(booking)} className="mt-4 underline">{busy === booking.id ? "Cancelling?" : "Cancel request"}</button>}
+      {booking.status === "COMPLETED" && !booking.review && <ReviewForm bookingId={booking.id} products={booking.products} onSaved={() => void load()} />}
+      {booking.review && <p className="mt-4 text-sm">Your review: {booking.review.rating}/5{booking.review.isHidden ? " (hidden by moderation)" : ""}</p>}
     </article>)}</div>
   </main><CustomerFooter /></div>;
 }

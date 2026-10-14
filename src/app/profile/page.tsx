@@ -70,6 +70,7 @@ export default function ProfilePage() {
         {customer.email && <div className="mb-6 flex flex-wrap gap-5">
           {customer.role === "BOUTIQUE_OWNER" && <Link className="underline" href="/boutique/dashboard">Open boutique workspace</Link>}
           {customer.role === "ADMIN" && <Link className="underline" href="/admin/boutiques">Review boutique applications</Link>}
+          <Link className="underline" href="/change-password">Change password</Link>
           <button onClick={() => void signOut({ callbackUrl: "/" })} className="underline">Sign out</button>
         </div>}
         <section className="rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-6 sm:p-8">

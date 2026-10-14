@@ -13,6 +13,7 @@ import { ProductImageManager } from "./product-image-manager";
 import { ProductServiceError, toFormValues, type BoutiqueProduct } from "./service";
 import styles from "./inventory.module.css";
 import workspace from "../dashboard/dashboard.module.css";
+import { api } from "@/lib/api-client";
 
 export function EditProductRoute() { const { id } = useParams<{ id: string }>(); return <ProductEditor key={id} id={id} />; }
 export function ProductEditor({ id }: { id?: string }) {
@@ -27,7 +28,7 @@ export function ProductEditor({ id }: { id?: string }) {
   return <ProductForm key={product?.version ?? "new"} product={product ?? undefined} onReload={() => { setProduct(null); setLoading(true); setError(""); setRequest((value) => value + 1); }} />;
 }
 
-const emptyValues: ProductFormValues = { name: "", description: "", category: "Bridal", occasionTags: "", colours: "", size: "", fabricStyle: "", rentalPriceMinor: "", depositMinor: "0", quantity: "1", images: [] };
+const emptyValues: ProductFormValues = { name: "", description: "", category: "", rentalPriceUnit: "PER_DAY", occasionTags: "", colours: "", size: "", fabricStyle: "", rentalPriceMinor: "", depositMinor: "0", quantity: "1", images: [] };
 function ProductForm({ product, onReload }: { product?: BoutiqueProduct; onReload: () => void }) {
   const service = useProductService();
   const router = useRouter();
@@ -35,6 +36,8 @@ function ProductForm({ product, onReload }: { product?: BoutiqueProduct; onReloa
   const [saved, setSaved] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [preview, setPreview] = useState<ProductInput | null>(null);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => { let active = true; if (service.mode === "live") api<{ id: string; name: string }[]>("/api/categories").then(items => { if (active) setCategories(items); }).catch(() => { if (active) setFeedback("Categories could not be loaded. Please refresh before saving."); }); return () => { active = false; }; }, [service]);
   const { register, handleSubmit, control, getValues, setValue, setError, clearErrors, formState: { errors, isSubmitting } } = useForm<ProductFormValues, unknown, ProductInput>({ resolver: zodResolver(productFormSchema), mode: "onTouched", defaultValues: product ? toFormValues(product) : emptyValues });
   const images = useWatch({ control, name: "images" });
   const busy = uploading || isSubmitting || saved;
@@ -44,7 +47,7 @@ function ProductForm({ product, onReload }: { product?: BoutiqueProduct; onReloa
     try { if (product) await service.updateProduct(product.id, input, product.version); else await service.createProduct(input); setSaved(true); setFeedback(`Product ${product ? "updated" : "added"}${service.mode === "demo" ? " in this demo session" : ""}. Returning to inventory…`); router.push("/boutique/products"); }
     catch (cause) { setError("root", { message: cause instanceof ProductServiceError ? cause.message : "The product couldn't be saved. Please try again." }); }
   }
-  function field(name: Exclude<keyof ProductFormValues, "images" | "description" | "category">, label: string, hint?: string, numeric = false) {
+  function field(name: Exclude<keyof ProductFormValues, "images" | "description" | "category" | "rentalPriceUnit">, label: string, hint?: string, numeric = false) {
     return <div><label className={styles.label} htmlFor={name}>{label}<Input id={name} {...register(name)} className={styles.input} inputMode={numeric ? name === "quantity" ? "numeric" : "decimal" : "text"} aria-invalid={Boolean(errors[name])} aria-describedby={`${name}-hint ${name}-error`} /></label><p id={`${name}-hint`} className={styles.hint}>{hint}</p><p id={`${name}-error`} className={styles.error}>{errors[name]?.message}</p></div>;
   }
   return <>
@@ -54,11 +57,11 @@ function ProductForm({ product, onReload }: { product?: BoutiqueProduct; onReloa
         <section className={workspace.panel}><div className={workspace.panelHead}><h2 className={workspace.panelTitle}>Product details</h2></div><div className={styles.fields}>
           <div className={styles.wide}>{field("name", "Product name *")}</div>
           <div className={styles.wide}><label className={styles.label} htmlFor="description">Description *<textarea {...register("description")} id="description" rows={5} className={styles.input} maxLength={2000} aria-invalid={Boolean(errors.description)} aria-describedby="description-error" /></label><p className={styles.hint}>20–2,000 characters.</p><p className={styles.error} id="description-error">{errors.description?.message}</p></div>
-          <div><label className={styles.label} htmlFor="category">Category *<select {...register("category")} id="category" className={styles.input} aria-invalid={Boolean(errors.category)} aria-describedby="category-error">{productCategories.map((category) => <option key={category}>{category}</option>)}</select></label><p className={styles.error} id="category-error">{errors.category?.message}</p></div>
+          <div><label className={styles.label} htmlFor="category">Category *<select {...register("category")} id="category" className={styles.input} aria-invalid={Boolean(errors.category)} aria-describedby="category-error">{categories.length ? <><option value="">Choose a category</option>{categories.map(category => <option value={category.id} key={category.id}>{category.name}</option>)}</> : productCategories.map(category => <option key={category}>{category}</option>)}</select></label><p className={styles.error} id="category-error">{errors.category?.message}</p></div>
           {field("size", "Size *", "e.g. M, XL or Free size")}{field("occasionTags", "Occasion tags", "Comma-separated, up to 10 tags")}{field("colours", "Colours *", "Comma-separated, e.g. Ivory, Gold")}
           <div className={styles.wide}>{field("fabricStyle", "Fabric / style *", "e.g. Silk / embroidered")}</div>
         </div></section>
-        <div><section className={workspace.panel}><div className={workspace.panelHead}><h2 className={workspace.panelTitle}>Pricing & stock</h2></div><div className={styles.fields}>{field("rentalPriceMinor", "Rental price (INR) *", "Amount in rupees, up to 2 decimal places", true)}{field("depositMinor", "Deposit (INR) *", "Zero is allowed", true)}<div className={styles.wide}>{field("quantity", "Stock quantity *", "Whole units, 0–10,000. Zero means out of stock.", true)}</div></div></section>
+        <div><section className={workspace.panel}><div className={workspace.panelHead}><h2 className={workspace.panelTitle}>Pricing & stock</h2></div><div className={styles.fields}>{field("rentalPriceMinor", "Rental price (INR) *", "Amount in rupees, up to 2 decimal places", true)}{field("depositMinor", "Deposit (INR) *", "Zero is allowed", true)}<label className={styles.label}>Pricing unit<select {...register("rentalPriceUnit")} defaultValue={product?.rentalPriceUnit ?? "PER_DAY"} className={styles.input}><option value="PER_DAY">Per day</option><option value="PER_RENTAL">Per rental</option></select></label><div className={styles.wide}>{field("quantity", "Stock quantity *", "Whole units, 0–10,000. Zero means out of stock.", true)}</div></div></section>
           <section className={workspace.panel}><div className={workspace.panelHead}><h2 className={workspace.panelTitle}>Product images</h2></div><ProductImageManager images={images} productId={product?.id} disabled={isSubmitting || saved} error={errors.images?.message} onPendingChange={setUploading} onChange={(update) => { setValue("images", update(getValues("images")), { shouldValidate: true, shouldDirty: true }); }} /></section>
         </div>
       </fieldset>

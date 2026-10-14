@@ -13,7 +13,8 @@ import {
 const navLinks = [
   { label: "Discover", href: "/" },
   { label: "Shop all", href: "/marketplace" },
-  { label: "Occasions", href: "/marketplace?category=occasion" },
+  { label: "Boutiques", href: "/boutiques" },
+  { label: "Occasion styling", href: "/styling" },
 ];
 
 export default function CustomerHeader() {

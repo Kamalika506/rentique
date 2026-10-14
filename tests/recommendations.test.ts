@@ -83,7 +83,7 @@ test("Gemini transport uses header credentials, JSON schema and validates all re
   } });
   assert.deepEqual(await provider.generate(input, new AbortController().signal), { styleTags: ["traditional"] });
   assert.equal((captured!.headers as Record<string, string>)["x-goog-api-key"], "test-secret");
-  const body = JSON.parse(captured!.body as string); assert.equal(body.generationConfig.responseFormat.text.mimeType, "application/json"); assert.equal(JSON.stringify(body).includes("Jaipur"), false);
+  const body = JSON.parse(captured!.body as string); assert.equal(body.generationConfig.responseFormat.text.mimeType, "APPLICATION_JSON"); assert.equal(JSON.stringify(body).includes("Jaipur"), false);
   for (const response of [new Response("error", { status: 500 }), Response.json({ candidates: [{ finishReason: "MAX_TOKENS" }] }), Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: "not json" }] } }] })]) {
     const broken = createGeminiPreferenceProvider({ apiKey: "test", model: "model", fetch: async () => response });
     await assert.rejects(() => broken.generate(input, new AbortController().signal));

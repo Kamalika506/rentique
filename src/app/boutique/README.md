@@ -1,5 +1,5 @@
-# Boutique management route scaffold
+# Boutique management
 
-Member 3's boutique area implements registration/status, dashboard, products/new/edit, bookings/detail, calendar and analytics. The root layout preserves independent onboarding, product and booking demo providers; dashboard and analytics are frozen reporting fixtures. Other folders remain README-only placeholders. No real backend mutations or authorization are implemented. The recommendation service lives behind `/api/recommendations` and fails closed until actual inventory/availability are connected.
+The boutique workspace uses authenticated PostgreSQL-backed API routes for registration/status, inventory and image uploads, bookings and inspections, calendar availability, settings, dashboard and analytics. Management routes require an approved boutique and verify ownership on every API operation. Pending owners can view their application and edit their profile. Demo services remain available for isolated fixture tests.
 
-Keep future route files thin and compose modules from `@/features/boutiques`, `@/features/analytics`, and `@/features/recommendations`. Integrate Member 2's session and access controls before exposing boutique data. See [implementation plan](../../../docs/MEMBER3_IMPLEMENTATION.md).
+Keep route files thin and compose modules from `@/features/boutiques`, `@/features/analytics`, and `@/features/recommendations`. See [current setup, API contracts and verification](../../../docs/CUSTOMER_BOUTIQUE_API.md). The [original member implementation notes](../../../docs/MEMBER3_IMPLEMENTATION.md) describe the earlier demo scaffold.

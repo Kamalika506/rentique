@@ -1,6 +1,5 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import { BoutiqueSettingsForm } from "@/features/boutiques/storefront/boutique-settings";
 
-// Profile editing awaits the shared boutique backend; show the implemented status screen.
-export default function SettingsPage() {
-  redirect("/boutique/pending");
-}
+export const metadata: Metadata = { title: "Boutique profile | Rentique" };
+export default function SettingsPage() { return <BoutiqueSettingsForm />; }

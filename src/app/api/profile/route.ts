@@ -4,7 +4,7 @@ import { z } from "zod";
 
 export const GET = endpoint(async () => {
   const user = await currentUser();
-  return { name: user.name ?? "", email: user.email ?? "", phone: user.phone ?? "", role: user.role };
+  return { name: user.name ?? "", email: user.email ?? "", phone: user.phone ?? "", role: user.role, emailVerified: Boolean(user.emailVerified) };
 });
 export const PATCH = endpoint(async request => {
   const user = await currentUser();

@@ -97,6 +97,7 @@ model User {
   role     UserRole @default(CUSTOMER)
   phone    String?  @db.VarChar(32)
   isActive Boolean  @default(true)
+  sessionVersion Int @default(0)
 
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
@@ -112,6 +113,8 @@ model User {
   wishlistItems       Wishlist[]
   reviews             Review[]
   reviewedBoutiques   Boutique[]            @relation("BoutiqueReviewedBy")
+  auditLogs           AuditLog[]
+  authTokens          AuthToken[]
 
   @@index([role, isActive])
   @@index([createdAt])
@@ -223,6 +226,8 @@ model Product {
   name         String          @db.VarChar(120)
   description  String          @db.Text
   category     ProductCategory
+  categoryId   String?
+  catalogCategory Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   occasionTags String[]        @default([])
   colours      String[]        @default([])
   fabricStyle  String          @db.VarChar(200)
@@ -246,6 +251,7 @@ model Product {
 
   @@index([boutiqueId, archived, createdAt])
   @@index([category, archived])
+  @@index([categoryId, archived])
   @@index([archived, createdAt])
 }
 
@@ -426,6 +432,8 @@ model Review {
   productId  String
   rating     Int
   comment    String?  @db.Text
+  isHidden   Boolean  @default(false)
+  moderationReason String? @db.Text
   createdAt  DateTime @default(now()) @db.Timestamptz(6)
   updatedAt  DateTime @updatedAt @db.Timestamptz(6)
 
@@ -436,4 +444,53 @@ model Review {
   @@unique([customerId, productId, bookingId])
   @@index([productId, createdAt])
   @@index([customerId, createdAt])
+}
+
+model Category {
+  id String @id @default(cuid())
+  slug String @unique @db.VarChar(120)
+  name String @unique @db.VarChar(120)
+  legacyKey ProductCategory? @unique
+  isActive Boolean @default(true)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  products Product[]
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  actorId String?
+  action String @db.VarChar(120)
+  entityType String @db.VarChar(80)
+  entityId String?
+  details Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  @@index([createdAt])
+  @@index([entityType, entityId])
+}
+
+enum AuthTokenType {
+  PASSWORD_RESET
+  EMAIL_VERIFICATION
+}
+
+model AuthToken {
+  id String @id @default(cuid())
+  userId String
+  tokenHash String @unique @db.VarChar(64)
+  type AuthTokenType
+  expiresAt DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, type])
+  @@index([expiresAt])
+}
+
+model RateLimitBucket {
+  key String @id @db.VarChar(160)
+  count Int @default(1)
+  resetAt DateTime @db.Timestamptz(6)
+  @@index([resetAt])
 }

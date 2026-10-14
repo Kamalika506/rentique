@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useState } from "react";
-import { signIn } from "next-auth/react";
+import { Suspense, useEffect, useState } from "react";
+import { getProviders, signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import Link from "next/link";
@@ -24,6 +24,8 @@ function LoginForm() {
   const [error, setError] = useState("");
 
   const [busy, setBusy] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+  useEffect(() => { getProviders().then(providers => setGoogleEnabled(Boolean(providers?.google))).catch(() => {}); }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,7 +44,8 @@ function LoginForm() {
       if (result?.error) { setError("Email or password is incorrect."); return; }
       const account = await api<{ role: string }>("/api/profile");
       window.dispatchEvent(new Event("rentique:session-change"));
-      router.push(account.role === "BOUTIQUE_OWNER" ? "/boutique/dashboard" : boutiqueIntent && account.role === "CUSTOMER" ? "/boutique/register" : "/profile");
+      const callback = params.get("callbackUrl"), safeCallback = callback && /^\/(marketplace(?:\/[^?#\\]*)?|styling|wishlist|my-rentals|profile)(?:[?#].*)?$/.test(callback) ? callback : "/profile";
+      router.push(account.role === "ADMIN" ? "/admin" : account.role === "BOUTIQUE_OWNER" ? "/boutique/dashboard" : boutiqueIntent ? "/boutique/register" : safeCallback);
       router.refresh();
     } catch { setError("Unable to sign in. Please try again."); }
     finally { setBusy(false); }
@@ -151,6 +154,8 @@ function LoginForm() {
               {busy ? "Signing in?" : "Sign in"} <ArrowRight size={17} />
             </button>
           </form>
+          <div className="mt-5 flex flex-wrap justify-center gap-4 text-sm"><Link href="/forgot-password" className="underline">Forgot password?</Link><Link href="/verify-email" className="underline">Verify email</Link></div>
+          {googleEnabled && <button onClick={() => void signIn("google", { callbackUrl: boutiqueIntent ? "/auth/continue?intent=boutique" : "/auth/continue" })} className="mt-5 w-full rounded-full border border-[#d7cec5] p-3 text-sm">Continue with Google</button>}
 
           <p className="mt-7 text-center text-sm text-[#716971]">
             New to Rentique?{" "}
