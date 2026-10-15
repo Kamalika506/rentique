@@ -4,9 +4,9 @@ import { usePathname } from "next/navigation";
 import CustomerHeader from "@/components/layout/customer-header";
 
 const navigation = [
-  ["Overview", "/admin"], ["Boutiques", "/admin/boutiques"], ["Users", "/admin/customers"],
-  ["Products", "/admin/products"], ["Categories", "/admin/categories"], ["Bookings", "/admin/bookings"],
-  ["Reviews", "/admin/reviews"], ["Activity", "/admin/activity"], ["Analytics", "/admin/analytics"],
+  ["Overview", "/admin"], ["Boutiques", "/admin/boutiques"],
+  ["Categories", "/admin/categories"], ["Bookings", "/admin/bookings"],
+  ["Reviews", "/admin/reviews"], ["Activity", "/admin/activity"],
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
