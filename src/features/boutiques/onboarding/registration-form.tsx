@@ -95,6 +95,7 @@ export function RegistrationForm() {
       <p className={styles.eyebrow}>For the beautifully individual</p>
       <h1 className={styles.title}>Your boutique.<br />A new chapter.</h1>
       <p className={styles.copy}>Bring your curated collection to a community that appreciates it. Let’s begin with the story behind your boutique.</p>
+      <p className="mt-5 text-sm">Already a boutique partner? <Link href="/login?intent=boutique" className={`${styles.textLink} underline`}>Boutique sign in</Link></p>
       <ol className={styles.steps}>
         <li><span className={styles.stepNumber}>01</span><div><strong>Introduce your boutique</strong><p>Tell us who you are and what makes your collection special.</p></div></li>
         <li><span className={styles.stepNumber}>02</span><div><strong>A considered review</strong><p>Your application will be reviewed before you join the collective.</p></div></li>

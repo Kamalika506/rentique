@@ -37,7 +37,7 @@ export default function Home() {
   const products = catalog.slice(0, 3).map(product => ({ ...product, designer: product.collection, period: product.rentalPeriod, tag: product.category }));
   return (
     <div className="min-h-screen bg-[#f7f5f1] text-[#302d31]">
-      <CustomerHeader showBoutiqueLinks />
+      <CustomerHeader />
 
       <main>
         <section className="mx-auto grid max-w-7xl gap-10 px-5 py-12 sm:px-8 sm:py-16 lg:grid-cols-[1fr_0.9fr] lg:items-center lg:gap-14 lg:py-20">
@@ -70,7 +70,7 @@ export default function Home() {
               </Link>
 
               <Link
-                href="/register"
+                href="/boutique/register"
                 className="inline-flex min-h-12 items-center justify-center rounded-full border border-[#d7cec5] bg-[#fffdf9] px-7 py-3 text-sm font-medium text-[#4c2544] transition hover:bg-[#f3efe9]"
               >
                 Join Rentique

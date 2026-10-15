@@ -16,18 +16,12 @@ const navLinks = [
   { label: "Occasion styling", href: "/styling" },
 ];
 
-export default function CustomerHeader({ showBoutiqueLinks = false }: { showBoutiqueLinks?: boolean }) {
+export default function CustomerHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: session, status } = useSession();
   const user = session?.user;
   const username = user?.name || user?.email?.split("@")[0] || "My account";
-  const links = showBoutiqueLinks
-    ? [
-        ...navLinks,
-        { label: "Boutique registration", href: "/boutique/register" },
-        { label: "Boutique sign in", href: "/login?intent=boutique" },
-      ]
-    : navLinks;
+  const links = navLinks;
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#e4dfd7] bg-[#fffdf9]/95 backdrop-blur">
