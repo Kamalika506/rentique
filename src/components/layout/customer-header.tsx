@@ -6,23 +6,28 @@ import { useSession } from "next-auth/react";
 import {
   Heart,
   Menu,
-  Search,
   UserRound,
   X,
 } from "lucide-react";
 
 const navLinks = [
   { label: "Discover", href: "/" },
-  { label: "Shop all", href: "/marketplace" },
   { label: "Boutiques", href: "/boutiques" },
   { label: "Occasion styling", href: "/styling" },
 ];
 
-export default function CustomerHeader() {
+export default function CustomerHeader({ showBoutiqueLinks = false }: { showBoutiqueLinks?: boolean }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { data: session, status } = useSession();
   const user = session?.user;
   const username = user?.name || user?.email?.split("@")[0] || "My account";
+  const links = showBoutiqueLinks
+    ? [
+        ...navLinks,
+        { label: "Boutique registration", href: "/boutique/register" },
+        { label: "Boutique sign in", href: "/login?intent=boutique" },
+      ]
+    : navLinks;
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#e4dfd7] bg-[#fffdf9]/95 backdrop-blur">
@@ -37,13 +42,13 @@ export default function CustomerHeader() {
 
         <nav
           aria-label="Main navigation"
-          className="hidden items-center gap-8 md:flex"
+          className="hidden items-center gap-5 xl:flex"
         >
-          {navLinks.map((link) => (
+          {links.map((link) => (
             <Link
               key={link.label}
               href={link.href}
-              className="text-sm text-[#514a50] transition-colors hover:text-[#4c2544]"
+              className="whitespace-nowrap text-sm text-[#514a50] transition-colors hover:text-[#4c2544]"
             >
               {link.label}
             </Link>
@@ -51,14 +56,6 @@ export default function CustomerHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 sm:flex">
-          <Link
-            href="/marketplace"
-            aria-label="Search rentals"
-            className="rounded-full p-2.5 text-[#4c2544] transition hover:bg-[#f3efe9]"
-          >
-            <Search size={19} />
-          </Link>
-
           <Link
             href="/wishlist"
             aria-label="Wishlist"
@@ -87,7 +84,7 @@ export default function CustomerHeader() {
           aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
           aria-expanded={menuOpen}
           aria-controls="mobile-navigation"
-          className="rounded-full p-2 text-[#4c2544] hover:bg-[#f3efe9] sm:hidden"
+          className="rounded-full p-2 text-[#4c2544] hover:bg-[#f3efe9] xl:hidden"
         >
           {menuOpen ? <X size={23} /> : <Menu size={23} />}
         </button>
@@ -97,10 +94,10 @@ export default function CustomerHeader() {
         <nav
           id="mobile-navigation"
           aria-label="Mobile navigation"
-          className="border-t border-[#e4dfd7] bg-[#fffdf9] px-5 py-4 sm:hidden"
+          className="border-t border-[#e4dfd7] bg-[#fffdf9] px-5 py-4 xl:hidden"
         >
           <div className="flex flex-col gap-1">
-            {navLinks.map((link) => (
+            {links.map((link) => (
               <Link
                 key={link.label}
                 href={link.href}

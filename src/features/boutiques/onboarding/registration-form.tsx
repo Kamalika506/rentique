@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { signOut } from "next-auth/react";
+import { useEffect } from "react";
+import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,19 +25,47 @@ const fields = [
   { name: "socialLink", label: "Website or social link", type: "url", placeholder: "https://instagram.com/yourboutique", autoComplete: "url", wide: true },
 ] as const;
 
+const draftKey = "rentique:boutique-registration-draft";
+
 export function RegistrationForm() {
   const service = useOnboardingService();
   const router = useRouter();
-  const { register, handleSubmit, setError, clearErrors, formState: { errors, isSubmitting, isSubmitSuccessful } } = useForm<BoutiqueRegistration>({
+  const { status } = useSession();
+  const needsAccount = service.mode === "live" && status === "unauthenticated";
+  const { register, reset, handleSubmit, setError, clearErrors, formState: { errors, isSubmitting, isSubmitSuccessful } } = useForm<BoutiqueRegistration>({
     resolver: zodResolver(boutiqueRegistrationSchema), mode: "onTouched", defaultValues: { name: "", description: "", contactEmail: "", phone: "", address: "", city: "", state: "", postalCode: "", categories: [], socialLink: "" },
   });
-  const locked = isSubmitting || (isSubmitSuccessful && !errors.root);
+  const locked = isSubmitting || (isSubmitSuccessful && !errors.root) || (service.mode === "live" && status === "loading");
+
+  useEffect(() => {
+    if (service.mode !== "live") return;
+    try {
+      const saved = sessionStorage.getItem(draftKey);
+      if (!saved) return;
+      const draft = boutiqueRegistrationSchema.safeParse(JSON.parse(saved));
+      if (draft.success) reset(draft.data);
+    } catch { /* The form remains usable when browser storage is unavailable. */ }
+  }, [reset, service.mode]);
+
+  function continueWithAccount(values: BoutiqueRegistration, destination: string) {
+    try {
+      sessionStorage.setItem(draftKey, JSON.stringify(values));
+      router.push(destination);
+    } catch {
+      setError("root", { message: "Allow browser session storage to keep your boutique details while you sign in." });
+    }
+  }
 
   async function submit(values: BoutiqueRegistration) {
     clearErrors("root");
+    if (needsAccount) {
+      continueWithAccount(values, "/register?intent=boutique");
+      return;
+    }
     try {
       await service.createApplication(values);
       if (service.mode === "live") {
+        try { sessionStorage.removeItem(draftKey); } catch { /* Submission has already succeeded. */ }
         await signOut({ redirect: false });
         window.dispatchEvent(new Event("rentique:session-change"));
         router.push("/login?intent=boutique&registered=boutique");
@@ -76,6 +105,7 @@ export function RegistrationForm() {
     <div className={styles.card}>
       <h2 className={styles.cardTitle}>Join the collective</h2>
       <p className={styles.copy}>A little about your boutique. Fields marked * are required.</p>
+      {needsAccount && <p className={`${styles.note} mt-5`}>Start with your boutique details below. Before submitting, create an owner account or sign in. Your details will be saved in this tab while you continue.</p>}
       <form noValidate onSubmit={handleSubmit(submit)} aria-busy={isSubmitting}>
         <fieldset disabled={locked}>
           <legend className={styles.section}>01 / Boutique & contact</legend>
@@ -98,8 +128,9 @@ export function RegistrationForm() {
           <div className="mt-5">{field("socialLink")}</div>
         </fieldset>
         {errors.root && <p role="alert" className={`${styles.error} mt-5`}>{errors.root.message} <Link className={styles.textLink} href="/boutique/pending">View application status</Link></p>}
-        {isSubmitSuccessful && !errors.root && <p role="status" className="mt-5 text-sm text-[#4c2544]">Application submitted. Opening sign in...</p>}
-        <Button type="submit" disabled={locked} className={styles.submit}>{isSubmitting ? <><LoaderCircle className="animate-spin" />Submitting application…</> : <>Submit boutique application<ArrowRight /></>}</Button>
+        {isSubmitSuccessful && !errors.root && <p role="status" className="mt-5 text-sm text-[#4c2544]">{needsAccount ? "Details saved. Opening account setup..." : "Application submitted. Opening sign in..."}</p>}
+        <Button type="submit" disabled={locked} className={styles.submit}>{isSubmitting ? <><LoaderCircle className="animate-spin" />Continuing…</> : <>{needsAccount ? "Continue to create owner account" : "Submit boutique application"}<ArrowRight /></>}</Button>
+        {needsAccount && <button type="button" disabled={locked} className={`${styles.textLink} mt-4 w-full text-sm underline`} onClick={handleSubmit((values) => continueWithAccount(values, "/login?intent=boutique"))}>Already have an account? Boutique sign in</button>}
         <p className={styles.finePrint}>Submitting an application does not grant management access.<br />Boutiques must be approved before management becomes available.</p>
       </form>
     </div>
