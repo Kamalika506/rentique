@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { SignOutButton } from "./sign-out-button";
 import {
   Heart,
   Menu,
@@ -21,13 +22,24 @@ export default function CustomerHeader() {
   const { data: session, status } = useSession();
   const user = session?.user;
   const username = user?.name || user?.email?.split("@")[0] || "My account";
-  const links = navLinks;
+  const isBoutiqueOwner = user?.role === "BOUTIQUE_OWNER";
+  const isAdmin = user?.role === "ADMIN";
+  const homeHref = isBoutiqueOwner ? "/boutique-home" : isAdmin ? "/admin-home" : "/";
+  const showCustomerLinks = status !== "loading" && (!user || user.role === "CUSTOMER");
+  const links = isBoutiqueOwner ? [
+    { label: "Home", href: "/boutique-home" },
+    { label: "Workspace", href: "/boutique/dashboard" },
+    { label: "Inventory", href: "/boutique/products" },
+    { label: "Bookings", href: "/boutique/bookings" },
+    { label: "Rental schedule", href: "/boutique/calendar" },
+    { label: "Boutique settings", href: "/boutique/settings" },
+  ] : isAdmin ? [{ label: "Home", href: "/admin-home" }, { label: "Admin workspace", href: "/admin" }] : showCustomerLinks ? navLinks : [];
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#e4dfd7] bg-[#fffdf9]/95 backdrop-blur">
       <div className="mx-auto flex h-[76px] max-w-7xl items-center justify-between gap-4 px-5 sm:px-8">
         <Link
-          href="/"
+          href={homeHref}
           className="shrink-0 text-2xl font-semibold tracking-[-0.06em] text-[#4c2544] sm:text-3xl"
           aria-label="Rentique home"
         >
@@ -50,13 +62,14 @@ export default function CustomerHeader() {
         </nav>
 
         <div className="hidden items-center gap-2 sm:flex">
-          <Link
+          {user && <SignOutButton className="px-3 py-2 text-sm text-[#4c2544] disabled:opacity-60" />}
+          {showCustomerLinks && <Link
             href="/wishlist"
             aria-label="Wishlist"
             className="rounded-full p-2.5 text-[#4c2544] transition hover:bg-[#f3efe9]"
           >
             <Heart size={19} />
-          </Link>
+          </Link>}
 
           {user ? <Link
             href="/profile"
@@ -91,6 +104,7 @@ export default function CustomerHeader() {
           className="border-t border-[#e4dfd7] bg-[#fffdf9] px-5 py-4 xl:hidden"
         >
           <div className="flex flex-col gap-1">
+            {user && <SignOutButton className="rounded-lg px-3 py-3 text-left text-sm text-[#4c2544] disabled:opacity-60" />}
             {links.map((link) => (
               <Link
                 key={link.label}
@@ -102,13 +116,13 @@ export default function CustomerHeader() {
               </Link>
             ))}
 
-            <Link
+            {showCustomerLinks && <Link
               href="/wishlist"
               onClick={() => setMenuOpen(false)}
               className="rounded-lg px-3 py-3 text-sm text-[#302d31] hover:bg-[#f3efe9]"
             >
               Wishlist
-            </Link>
+            </Link>}
 
             {user ? <Link href="/profile" onClick={() => setMenuOpen(false)} className="rounded-lg px-3 py-3 text-sm text-[#302d31]">{username}</Link> : status === "loading" ? <p role="status">Loading account...</p> : <>
               <Link href="/login" onClick={() => setMenuOpen(false)} className="rounded-full bg-[#4c2544] px-4 py-3 text-center text-sm text-white">Login</Link>

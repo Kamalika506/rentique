@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { signOut } from "next-auth/react";
+import { SignOutButton } from "@/components/layout/sign-out-button";
 import { api, jsonRequest } from "@/lib/api-client";
 import Link from "next/link";
 import { ArrowRight, Heart, Package, UserRound } from "lucide-react";
@@ -71,7 +71,7 @@ export default function ProfilePage() {
           {customer.role === "BOUTIQUE_OWNER" && <Link className="underline" href="/boutique/dashboard">Open boutique workspace</Link>}
           {customer.role === "ADMIN" && <Link className="underline" href="/admin/boutiques">Review boutique applications</Link>}
           <Link className="underline" href="/change-password">Change password</Link>
-          <button onClick={() => void signOut({ callbackUrl: "/" })} className="underline">Sign out</button>
+          <SignOutButton className="underline" />
         </div>}
         <section className="rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-6 sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
@@ -200,58 +200,59 @@ export default function ProfilePage() {
           )}
         </section>
 
-        <div className="mt-8 grid gap-5 sm:grid-cols-2">
-          <Link
-            href="/wishlist"
-            className="group rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-6 transition hover:-translate-y-0.5 hover:shadow-md sm:p-7"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex size-12 items-center justify-center rounded-xl bg-[#f3efe9] text-[#4c2544]">
-                <Heart size={23} />
+        {customer.role === "CUSTOMER" && (
+          <div className="mt-8 grid gap-5 sm:grid-cols-2">
+            <Link
+              href="/wishlist"
+              className="group rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-6 transition hover:-translate-y-0.5 hover:shadow-md sm:p-7"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex size-12 items-center justify-center rounded-xl bg-[#f3efe9] text-[#4c2544]">
+                  <Heart size={23} />
+                </div>
+                <ArrowRight
+                  size={20}
+                  className="text-[#927c59] transition group-hover:translate-x-1"
+                />
               </div>
-              <ArrowRight
-                size={20}
-                className="text-[#927c59] transition group-hover:translate-x-1"
-              />
-            </div>
-            <h2 className="mt-5 text-xl font-semibold text-[#4c2544]">
-              My wishlist
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-[#716971]">
-              View the fashion pieces you have saved for later.
-            </p>
-          </Link>
+              <h2 className="mt-5 text-xl font-semibold text-[#4c2544]">
+                My wishlist
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[#716971]">
+                View the fashion pieces you have saved for later.
+              </p>
+            </Link>
 
-          {/* Updated: My Rentals card now navigates to the rental history page */}
-          <Link
-            href="/my-rentals"
-            className="group rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-6 transition hover:-translate-y-0.5 hover:shadow-md sm:p-7"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex size-12 items-center justify-center rounded-xl bg-[#f3efe9] text-[#4c2544]">
-                <Package size={23} />
+            <Link
+              href="/my-rentals"
+              className="group rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-6 transition hover:-translate-y-0.5 hover:shadow-md sm:p-7"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex size-12 items-center justify-center rounded-xl bg-[#f3efe9] text-[#4c2544]">
+                  <Package size={23} />
+                </div>
+                <ArrowRight
+                  size={20}
+                  className="text-[#927c59] transition group-hover:translate-x-1"
+                />
               </div>
-              <ArrowRight
-                size={20}
-                className="text-[#927c59] transition group-hover:translate-x-1"
-              />
-            </div>
 
-            <h2 className="mt-5 text-xl font-semibold text-[#4c2544]">
-              My rentals
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-[#716971]">
-              View your rental history, rental periods, and booking status.
-            </p>
-          </Link>
-        </div>
+              <h2 className="mt-5 text-xl font-semibold text-[#4c2544]">
+                My rentals
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[#716971]">
+                View your rental history, rental periods, and booking status.
+              </p>
+            </Link>
+          </div>
+        )}
 
         <div className="mt-8">
           <Link
-            href="/marketplace"
+            href={customer.role === "BOUTIQUE_OWNER" ? "/boutique/dashboard" : customer.role === "ADMIN" ? "/admin" : "/marketplace"}
             className="inline-flex items-center gap-2 text-sm font-medium text-[#4c2544] hover:text-[#927c59]"
           >
-            Explore the marketplace <ArrowRight size={17} />
+            {customer.role === "BOUTIQUE_OWNER" ? "Back to boutique workspace" : customer.role === "ADMIN" ? "Back to admin workspace" : "Explore the marketplace"} <ArrowRight size={17} />
           </Link>
         </div>
       </main>

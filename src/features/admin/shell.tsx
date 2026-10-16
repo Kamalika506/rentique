@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import CustomerHeader from "@/components/layout/customer-header";
 
 const navigation = [
+  ["Home", "/admin-home"],
   ["Overview", "/admin"], ["Boutiques", "/admin/boutiques"],
   ["Categories", "/admin/categories"], ["Bookings", "/admin/bookings"],
   ["Reviews", "/admin/reviews"], ["Activity", "/admin/activity"],
@@ -18,7 +19,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <nav aria-label="Admin navigation" className="flex flex-wrap gap-2 lg:flex-col">
           {navigation.map(([label, href]) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined} className={`rounded-xl px-4 py-2.5 text-sm ${pathname === href ? "bg-[#4c2544] text-white" : "text-[#716971] hover:bg-[#f3efe9]"}`}>{label}</Link>)}
         </nav>
-        <Link href="/marketplace" className="mt-5 inline-block text-sm text-[#4c2544] underline">View marketplace</Link>
       </aside>
       <main className="min-w-0 flex-1 p-5 sm:p-8 lg:p-10">{children}</main>
     </div>

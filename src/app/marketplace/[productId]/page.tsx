@@ -19,7 +19,9 @@ export default function ProductPage() { return <Suspense fallback={<main classNa
 function ProductRoute() { const { productId } = useParams<{ productId: string }>(); return <ProductDetails key={productId} productId={productId} />; }
 
 function ProductDetails({ productId }: { productId: string }) {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
+  const canBook = status === "authenticated" && session?.user.role === "CUSTOMER";
+  const workspaceAccount = status === "authenticated" && !canBook;
   const [product, setProduct] = useState<CatalogProduct | null>(null), [error, setError] = useState("");
   const [reviews, setReviews] = useState<ProductReviews | null>(null), [reviewError, setReviewError] = useState("");
   const [image, setImage] = useState("");
@@ -48,6 +50,7 @@ function ProductDetails({ productId }: { productId: string }) {
   const validSelection = !!variant && Number.isInteger(quantity) && quantity > 0 && quantity <= variant.quantity && !!pickup && !!returned && Date.parse(returned) > Date.parse(pickup);
   const currentQuote = quote?.key === selectionKey ? quote.data : null;
   async function checkAvailability() {
+    if (workspaceAccount) return;
     if (status !== "authenticated") { setLoginRequired(true); setError("Sign in to access rental dates and availability."); return; }
     if (!validSelection || !form.current?.reportValidity()) return;
     const version = ++requestVersion.current, controller = new AbortController();
@@ -61,7 +64,7 @@ function ProductDetails({ productId }: { productId: string }) {
     finally { if (version === requestVersion.current) setChecking(false); }
   }
   async function placeOrder(event: React.FormEvent) {
-    event.preventDefault(); if (saving || bookingId || !currentQuote?.available) return;
+    event.preventDefault(); if (!canBook || saving || bookingId || !currentQuote?.available) return;
     if (Date.parse(currentQuote.checkedAt) + 60000 <= Date.now()) { setQuote(null); setError("Please check availability again for a fresh quote."); return; }
     setError(""); setLoginRequired(false); setSaving(true);
     try {
@@ -93,11 +96,11 @@ function ProductDetails({ productId }: { productId: string }) {
           <p className="my-5 text-2xl">{bookingMoney(variant?.rentalPriceMinor ?? product.rentalPriceMinor)} / {product.rentalPeriod}</p><p className="leading-7">{product.description}</p>
           <p className="mt-4 text-sm">Refundable deposit per item: {bookingMoney(variant?.depositMinor ?? product.depositMinor)}</p>
           {!!product.colours?.length && <p className="mt-2 text-sm">Colours: {product.colours.join(", ")}</p>}{!!product.occasionTags?.length && <p className="mt-2 text-sm">Occasions: {product.occasionTags.join(", ")}</p>}
-          {bookingId ? <div role="status" className="mt-8 rounded-2xl border bg-white p-6"><h2 className="text-xl">Request sent to {product.boutique.name}</h2><p className="my-3">Order {bookingId} is pending boutique confirmation.</p><Link href="/my-rentals" className="underline">Track your order</Link></div> : <form ref={form} onSubmit={placeOrder} className="mt-8 space-y-4 rounded-2xl border bg-white p-6">
+          {workspaceAccount ? <div className="mt-8 rounded-2xl border bg-white p-6"><p>Rental bookings are available to customer accounts only.</p><Link href={session?.user.role === "ADMIN" ? "/admin" : "/boutique/dashboard"} className="mt-3 inline-block text-[#4c2544] underline">Back to workspace</Link></div> : bookingId ? <div role="status" className="mt-8 rounded-2xl border bg-white p-6"><h2 className="text-xl">Request sent to {product.boutique.name}</h2><p className="my-3">Order {bookingId} is pending boutique confirmation.</p><Link href="/my-rentals" className="underline">Track your order</Link></div> : <form ref={form} onSubmit={placeOrder} className="mt-8 space-y-4 rounded-2xl border bg-white p-6">
             <h2 className="font-serif text-2xl">Book your rental</h2>
             {status === "unauthenticated" && <div className="rounded-xl bg-[#f7f5f1] p-4"><p>Sign in to access rental dates, check availability and book this outfit.</p><Link href={`/login?callbackUrl=${encodeURIComponent(`/marketplace/${productId}`)}`} className="mt-3 inline-block font-medium text-[#4c2544] underline">Login to check availability</Link><Link href="/register" className="ml-4 text-[#4c2544] underline">Sign up</Link></div>}
             {status === "loading" && <p role="status">Checking your session?</p>}
-            <fieldset disabled={saving || status !== "authenticated"} className="space-y-4 disabled:opacity-60">
+            <fieldset disabled={saving || !canBook} className="space-y-4 disabled:opacity-60">
               <label className="block">Size<select required value={variantId} onChange={event => { invalidateQuote(); setVariantId(event.target.value); setQuantity(1); }} className={inputClass}><option value="">Choose a size</option>{product.variants.map(v => <option key={v.id} value={v.id} disabled={!v.quantity}>{v.size.replaceAll("_", " ")} {v.quantity ? `(${v.quantity} total stock)` : "(out of stock)"}</option>)}</select></label>
               <label className="block">Quantity<input className={inputClass} type="number" required min={1} max={variant?.quantity ?? 1} value={quantity} onChange={event => { invalidateQuote(); setQuantity(Number(event.target.value)); }} /></label>
               <label className="block">Pickup date and time<input className={inputClass} type="datetime-local" required value={pickup} onChange={event => { invalidateQuote(); setPickup(event.target.value); }} /></label>

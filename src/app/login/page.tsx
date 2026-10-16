@@ -17,6 +17,7 @@ function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const boutiqueIntent = params.get("intent") === "boutique";
+  const adminIntent = params.get("intent") === "admin";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -45,7 +46,7 @@ function LoginForm() {
       const account = await api<{ role: string }>("/api/profile");
       window.dispatchEvent(new Event("rentique:session-change"));
       const callback = params.get("callbackUrl"), safeCallback = callback && /^\/(marketplace(?:\/[^?#\\]*)?|styling|wishlist|my-rentals|profile)(?:[?#].*)?$/.test(callback) ? callback : "/profile";
-      router.push(account.role === "ADMIN" ? "/admin" : account.role === "BOUTIQUE_OWNER" ? "/boutique/dashboard" : boutiqueIntent ? "/boutique/register" : safeCallback);
+      router.push(account.role === "ADMIN" ? "/admin-home" : account.role === "BOUTIQUE_OWNER" ? "/boutique-home" : boutiqueIntent ? "/boutique/register" : safeCallback);
       router.refresh();
     } catch { setError("Unable to sign in. Please try again."); }
     finally { setBusy(false); }
@@ -66,11 +67,11 @@ function LoginForm() {
           </p>
 
           <h1 className="mt-3 font-serif text-4xl text-[#4c2544]">
-            {boutiqueIntent ? "Boutique sign in" : "Sign in to Rentique"}
+            {boutiqueIntent ? "Boutique sign in" : adminIntent ? "Administrator sign in" : "Sign in to Rentique"}
           </h1>
 
           <p className="mt-3 text-sm leading-6 text-[#716971]">
-            {boutiqueIntent ? "Sign in to continue your boutique registration or open your dashboard." : "Sign in to manage your account, wishlist, and rentals."}
+            {boutiqueIntent ? "Sign in to open your boutique home and manage your business." : adminIntent ? "Sign in with your administrator account to manage Rentique." : "Sign in to manage your account, wishlist, and rentals."}
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
@@ -157,7 +158,7 @@ function LoginForm() {
           <div className="mt-5 flex flex-wrap justify-center gap-4 text-sm"><Link href="/forgot-password" className="underline">Forgot password?</Link><Link href="/verify-email" className="underline">Verify email</Link></div>
           {googleEnabled && <button onClick={() => void signIn("google", { callbackUrl: boutiqueIntent ? "/auth/continue?intent=boutique" : "/auth/continue" })} className="mt-5 w-full rounded-full border border-[#d7cec5] p-3 text-sm">Continue with Google</button>}
 
-          <p className="mt-7 text-center text-sm text-[#716971]">
+          {!adminIntent && <p className="mt-7 text-center text-sm text-[#716971]">
             New to Rentique?{" "}
             <Link
               href={boutiqueIntent ? "/register?intent=boutique" : "/register"}
@@ -165,7 +166,7 @@ function LoginForm() {
             >
               {boutiqueIntent ? "Create a boutique account" : "Create an account"}
             </Link>
-          </p>
+          </p>}
 
           <p className="mt-5 text-center text-xs leading-5 text-[#8a8188]">
             Use your Rentique account to manage rentals or your boutique.
