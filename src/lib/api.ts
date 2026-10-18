@@ -33,7 +33,7 @@ export async function currentUser(role?: "CUSTOMER" | "ADMIN") {
   const session = await auth();
   if (!session?.user?.id) throw new ApiError(401, "Please sign in to continue.");
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (!user?.isActive || (role && user.role !== role)) throw new ApiError(403, "You do not have access to this operation.");
+  if (!user?.isActive || (role && user.role !== role && !(role === "CUSTOMER" && user.role === "BOUTIQUE_OWNER"))) throw new ApiError(403, "You do not have access to this operation.");
   return user;
 }
 export async function ownedBoutique(approved = true) {

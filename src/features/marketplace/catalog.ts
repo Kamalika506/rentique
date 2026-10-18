@@ -6,9 +6,10 @@ export interface CatalogProduct {
   id: string; name: string; description: string; category: string; collection: string; price: number; rentalPeriod: string; image: string; images: string[];
   categoryId?: string | null; categorySlug?: string | null; occasionTags?: string[]; colours?: string[];
   ratingAverage?: number | null; ratingCount?: number;
+  garmentType?: string; includedPieces?: string[]; fabricStyle?: string;
   rentalPriceMinor: number; depositMinor: number; rentalPriceUnit: "PER_DAY" | "PER_RENTAL";
-  boutique: { id: string; name: string; city: string; state?: string; address?: string; phone?: string; contactEmail?: string; description?: string; socialLink?: string };
-  variants: { id: string; size: string; quantity: number; rentalPriceMinor: number; depositMinor: number }[];
+  boutique: { id: string; name: string; city: string; state?: string; address?: string; phone?: string; contactEmail?: string; description?: string; socialLink?: string; openingHours?: string; rentalPolicy?: string };
+  variants: { id: string; size: string; measurements?: string; quantity: number; rentalPriceMinor: number; depositMinor: number }[];
 }
 export interface CatalogPage {
   items: CatalogProduct[]; total: number; page: number; pageSize: number; totalPages: number;

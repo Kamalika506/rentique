@@ -8,11 +8,13 @@ Rentique is a fashion rental marketplace connecting customers with boutiques for
 
 | Workspace | Capabilities |
 | --- | --- |
-| Customer | Browse and filter collections, explore boutiques, save a wishlist, receive occasion styling suggestions, check dated availability, request rentals, and review completed rentals. |
+| Customer | Browse approved shops, filter by city/type/size/dates, save favourites, build a same-shop basket, review full-period estimates, request verified-account reservations, track partial returns, receive reminders, report problems, and review completed rentals. |
 | Boutique | Submit an application, manage a storefront, upload product images, maintain stock and pricing, process bookings, and view a rental calendar and analytics. |
 | Administrator | Review boutique applications, manage accounts and categories, moderate products and reviews, and monitor bookings and activity. |
 
-Availability and pricing are checked on the server when a booking is submitted. Payment collection is arranged with the boutique; the application does not currently integrate a payment gateway. Manual refund records track status and do not transfer funds.
+Customers collect and return items at the boutique. Rental prices are informational; Rentique has no payment, deposit, or refund workflow. Stock and estimated prices are checked again when a reviewed reservation request is submitted.
+
+See the [customer implementation and setup guide](docs/CUSTOMER_FEATURES.md) for the feature audit, new quote/basket contract, email verification, image styling, and scheduled reservation jobs.
 
 ## Technology
 
@@ -24,7 +26,7 @@ Availability and pricing are checked on the server when a booking is submitted. 
 | Persistence | PostgreSQL with Prisma 6 |
 | Authentication | Auth.js credentials sessions and optional Google sign-in |
 | Product images | Cloudinary |
-| Styling recommendations | Inventory-based rules with optional Gemini preference interpretation |
+| Styling recommendations | Size-aware inventory rules, optional Gemini preferences, and consented inspiration-image attribute matching |
 | Verification | ESLint, TypeScript, Node.js test runner through `tsx` |
 
 ## Local development

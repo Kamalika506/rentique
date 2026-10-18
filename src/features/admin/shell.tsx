@@ -8,6 +8,7 @@ const navigation = [
   ["Overview", "/admin"], ["Boutiques", "/admin/boutiques"],
   ["Categories", "/admin/categories"], ["Bookings", "/admin/bookings"],
   ["Reviews", "/admin/reviews"], ["Activity", "/admin/activity"],
+  ["Support", "/admin/support"],
 ];
 
 export function AdminShell({ children }: { children: React.ReactNode }) {

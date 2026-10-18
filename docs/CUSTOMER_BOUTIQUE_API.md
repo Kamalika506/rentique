@@ -1,5 +1,7 @@
 # Rentique setup and connected modules
 
+> Customer contract update, 16 October 2026: use the [customer feature guide](CUSTOMER_FEATURES.md) for reviewed multi-item quotes, verified-email reservations, partial returns, image matching, and notifications. The older direct single-variant booking body and deposit/refund descriptions below are superseded by that guide. Existing history is preserved; new reservations have no deposit/refund functionality.
+
 Rentique uses Next.js App Router, React, TypeScript and Tailwind for the interface; Next.js route handlers for the backend; Auth.js for credentials/optional Google authentication; and Prisma with PostgreSQL for persistence. Customer, boutique and administrator screens use live APIs. Demo adapters are retained only for fixture tests.
 
 ## Local setup

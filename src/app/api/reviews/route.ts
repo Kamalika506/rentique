@@ -19,9 +19,9 @@ export const POST = endpoint(async request => {
   const customer = await currentUser("CUSTOMER");
   const input = z.object({ bookingId: z.string().min(1), productId: z.string().min(1), rating: z.number().int().min(1).max(5), comment: z.string().trim().max(2000).default("") }).strict().parse(await request.json());
   return prisma.$transaction(async tx => {
-    const booking = await tx.booking.findFirst({ where: { id: input.bookingId, customerId: customer.id, status: "COMPLETED", items: { some: { variant: { productId: input.productId } } } } });
+    const booking = await tx.booking.findFirst({ where: { id: input.bookingId, customerId: customer.id, status: "COMPLETED", pickedUpAt: { not: null }, completedAt: { gte: new Date(Date.now() - 30 * 86400000) }, boutique: { ownerId: { not: customer.id } }, items: { some: { variant: { productId: input.productId } } } } });
     if (!booking) throw new ApiError(403, "You can review only a product from your own completed rental.");
-    if (await tx.review.findUnique({ where: { bookingId: booking.id } })) throw new ApiError(409, "This rental has already been reviewed.");
+    if (await tx.review.findUnique({ where: { bookingId_productId: { bookingId: booking.id, productId: input.productId } } })) throw new ApiError(409, "This product has already been reviewed for this rental.");
     const review = await tx.review.create({ data: { ...input, customerId: customer.id }, select: { id: true, rating: true, comment: true, createdAt: true } });
     await tx.auditLog.create({ data: { actorId: customer.id, action: "REVIEW_CREATED", entityType: "Review", entityId: review.id, details: { productId: input.productId, bookingId: input.bookingId } } });
     return review;

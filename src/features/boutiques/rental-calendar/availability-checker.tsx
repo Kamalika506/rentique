@@ -63,7 +63,7 @@ export function AvailabilityChecker({ boutiqueTimezone }: { boutiqueTimezone: st
       {error && <p role="alert" className="mt-4 text-sm text-red-700">{error}</p>}
       {quote && <div className="mt-5 rounded-xl border border-[#e4dfd7] bg-[#f7f5f1] p-5" role="status">
         <p className={`text-sm font-semibold ${quote.available ? "text-green-800" : "text-red-700"}`}>{quote.available ? "Available for this rental interval" : "Requested quantity is unavailable"}</p>
-        <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-4"><div><dt className={styles.muted}>Available units</dt><dd className="mt-1 font-medium">{quote.availableUnits}</dd></div><div><dt className={styles.muted}>Rental · {quote.rentalDays} {quote.rentalDays === 1 ? "day" : "days"}</dt><dd className="mt-1 font-medium">{money(quote.rentalMinor)}</dd></div><div><dt className={styles.muted}>Deposit</dt><dd className="mt-1 font-medium">{money(quote.depositMinor)}</dd></div><div><dt className={styles.muted}>Rental + deposit</dt><dd className="mt-1 font-medium">{money(quote.totalMinor)}</dd></div></dl>
+        <dl className="mt-3 grid gap-4 text-sm sm:grid-cols-4"><div><dt className={styles.muted}>Available units</dt><dd className="mt-1 font-medium">{quote.availableUnits}</dd></div><div><dt className={styles.muted}>Rental · {quote.rentalDays} {quote.rentalDays === 1 ? "day" : "days"}</dt><dd className="mt-1 font-medium">{money(quote.rentalMinor)}</dd></div><div><dt className={styles.muted}>Full-period estimate</dt><dd className="mt-1 font-medium">{money(quote.totalMinor)}</dd></div></dl>
         <p className={`${styles.muted} mt-4`}>Checked {new Date(quote.checkedAt).toLocaleString("en-IN")} · This check does not reserve stock.</p>
       </div>}
     </div>

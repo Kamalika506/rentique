@@ -12,7 +12,7 @@ export function allowedActions(status: BoutiqueBookingStatus, inspected: boolean
 }
 export function rentalDays(pickup: Date, returned: Date, now = new Date()) {
   const duration = returned.getTime() - pickup.getTime();
-  if (!Number.isFinite(duration) || pickup <= now || duration <= 0 || duration > 90 * 86400000) throw new Error("Choose future pickup and return dates, up to 90 days apart.");
+  if (!Number.isFinite(duration) || pickup <= now || duration <= 0 || duration > 14 * 86400000) throw new Error("Choose future pickup and return dates, up to 14 days apart.");
   return Math.ceil(duration / 86400000);
 }
 export function lineAmounts(price: bigint, deposit: bigint, unit: string, days: number, quantity: number) {

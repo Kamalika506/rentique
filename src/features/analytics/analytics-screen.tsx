@@ -47,7 +47,7 @@ export function AnalyticsScreen({ service: suppliedService }: { service?: Boutiq
             {[
               ["Total bookings", metrics.totalBookings.toLocaleString("en-IN"), "Includes all request statuses"],
               ["Completed rentals", metrics.completedRentals.toLocaleString("en-IN"), "COMPLETED bookings only"],
-              ["Completed rental revenue", bookingMoney(metrics.completedRevenueMinor), "Rental charges; excludes deposits and cancellations"],
+              ["Estimated listed rental value", bookingMoney(metrics.completedRevenueMinor), "Informational estimates on completed rentals"],
               ["Pending bookings", metrics.pendingBookings.toLocaleString("en-IN"), "Awaiting a booking decision"],
               ["Cancelled bookings", metrics.cancelledBookings.toLocaleString("en-IN"), "CANCELLED status only"],
               ["Inventory utilization", metrics.utilizationPercent === null ? "Unavailable" : `${metrics.utilizationPercent.toFixed(1)}%`, metrics.utilizationPercent === null ? "Complete historical capacity and occupied unit-days required" : "Occupied / available unit-days for this period"],
@@ -63,7 +63,7 @@ export function AnalyticsScreen({ service: suppliedService }: { service?: Boutiq
             <section className={styles.panel}><div className={styles.panelHead}><div><h2 className={styles.panelTitle}>Popular products</h2><p className={styles.muted}>Ranked by unique bookings; excludes cancelled and rejected requests.</p></div></div>{!metrics.popularProducts.length ? <div className={styles.empty}><p>No eligible product bookings.</p></div> : <div className={styles.tableWrap} role="region" aria-label="Popular products" tabIndex={0}><table className={styles.table}><caption className="sr-only">Product booking counts</caption><thead><tr><th scope="col">Product</th><th scope="col">Bookings</th><th scope="col">Units requested</th></tr></thead><tbody>{metrics.popularProducts.map((product) => <tr key={product.id}><td>{product.name}</td><td>{product.bookings}</td><td>{product.units}</td></tr>)}</tbody></table></div>}</section>
             <section className={styles.panel}><div className={styles.panelHead}><div><h2 className={styles.panelTitle}>Category-wise bookings</h2><p className={styles.muted}>One count per category per booking, excluding cancelled and rejected. A booking may span categories.</p></div></div>{!metrics.categories.length ? <div className={styles.empty}><p>No eligible category bookings.</p></div> : <div className={charts.categories}>{metrics.categories.map((category) => <div key={category.name}><div className={charts.categoryLabel}><span>{category.name}</span><span>{category.bookings} bookings</span></div><div className={charts.horizontalTrack} aria-hidden="true"><div className={charts.horizontalBar} style={{ width: `${category.bookings / Math.max(...metrics.categories.map((item) => item.bookings)) * 100}%` }} /></div></div>)}</div>}</section>
           </div>
-          <p className={styles.muted}>Completed revenue reports rental charges on completed bookings in this creation cohort. It is not a payment settlement or refund report. No availability decisions are made here.</p>
+          <p className={styles.muted}>Listed rental value sums informational estimates on completed bookings in this creation cohort. It does not represent money received. Reports do not decide availability.</p>
         </>}
       </main>
     </div>

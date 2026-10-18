@@ -19,7 +19,7 @@ const fields = [
 
 function formDetails(profile: BoutiqueSettings): BoutiqueSettingsInput {
   return { name: profile.name, description: profile.description, contactEmail: profile.contactEmail, phone: profile.phone, address: profile.address,
-    city: profile.city, state: profile.state, postalCode: profile.postalCode, socialLink: profile.socialLink ?? "", timezone: profile.timezone, version: profile.version };
+    city: profile.city, state: profile.state, postalCode: profile.postalCode, socialLink: profile.socialLink ?? "", timezone: profile.timezone, version: profile.version, openingHours: profile.openingHours ?? "", rentalPolicy: profile.rentalPolicy ?? "" };
 }
 
 export function BoutiqueSettingsForm() {
@@ -51,6 +51,8 @@ export function BoutiqueSettingsForm() {
           <form onSubmit={save} className={`${styles.panel} p-6`}>
             <div className="grid gap-5 sm:grid-cols-2">{fields.map((field) => <label className={styles.field} key={field.key}>{field.label}<input className={styles.input} type={"type" in field ? field.type : "text"} required={field.key !== "socialLink"} maxLength={field.max} value={form[field.key]} disabled={saving} onChange={(event) => { setForm({ ...form, [field.key]: event.target.value }); setMessage(""); }} placeholder={field.key === "timezone" ? "Asia/Kolkata" : field.key === "socialLink" ? "https://" : undefined} /></label>)}</div>
             <label className={`${styles.field} mt-5`}>About your boutique<textarea rows={5} className={styles.input} required minLength={20} maxLength={1000} value={form.description} disabled={saving} onChange={(event) => { setForm({ ...form, description: event.target.value }); setMessage(""); }} /></label>
+            <label className="mt-5 block text-sm">Shop pickup and return hours<textarea rows={3} maxLength={1000} className={styles.input} value={form.openingHours ?? ""} disabled={saving} onChange={event => setForm({ ...form, openingHours: event.target.value })} placeholder="For example: Monday–Saturday, 10 am–7 pm; Sunday closed" /></label>
+            <label className="mt-5 block text-sm">Customer-visible rental policies<textarea rows={5} maxLength={3000} className={styles.input} value={form.rentalPolicy ?? ""} disabled={saving} onChange={event => setForm({ ...form, rentalPolicy: event.target.value })} placeholder="Fit checks, included pieces, collection and return instructions. No online payments." /></label>
             <div className="mt-6 flex flex-wrap items-center gap-4"><Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save profile"}</Button><Button type="button" variant="outline" disabled={saving} onClick={reloadProfile}>Reload latest profile</Button>{profile.status === "APPROVED" && <Link href={`/boutiques/${encodeURIComponent(profile.id)}`} className={styles.link}>View storefront →</Link>}</div>
           </form>
         </> : <Button onClick={reloadProfile}>Try again</Button>}

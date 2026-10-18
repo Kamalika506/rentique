@@ -18,9 +18,9 @@ test("connected discovery, storefronts, admin, availability, reviews and recover
 
   function client() {
     const cookies = new Map<string, string>();
-    return async (path: string, method = "GET", body?: unknown, form = false) => {
+    return async (path: string, method = "GET", body?: unknown, form = false, extraHeaders: Record<string, string> = {}) => {
       const response = await fetch(base + path, {
-        method, redirect: "manual", headers: { Origin: base, Cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join("; "), ...(body === undefined ? {} : { "Content-Type": form ? "application/x-www-form-urlencoded" : "application/json" }) },
+        method, redirect: "manual", headers: { ...extraHeaders, Origin: base, Cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join("; "), ...(body === undefined ? {} : { "Content-Type": form ? "application/x-www-form-urlencoded" : "application/json" }) },
         body: body === undefined ? undefined : form ? String(body) : JSON.stringify(body),
       });
       for (const cookie of response.headers.getSetCookie()) { const pair = cookie.split(";")[0], equals = pair.indexOf("="); cookies.set(pair.slice(0, equals), pair.slice(equals + 1)); }
@@ -30,6 +30,11 @@ test("connected discovery, storefronts, admin, availability, reviews and recover
     };
   }
   type Client = ReturnType<typeof client>;
+  async function requestReservation(request: Client, order: { variantId: string; quantity: number; pickupAt: string; returnAt: string }) {
+    const quote = await request("/api/quotes", "POST", { items: [{ variantId: order.variantId, quantity: order.quantity }], pickupAt: order.pickupAt, returnAt: order.returnAt });
+    if (quote.status !== 201) return quote;
+    return request("/api/bookings", "POST", { quoteId: quote.data.quoteId, acceptedTerms: true }, false, { "Idempotency-Key": randomUUID() });
+  }
   async function credentials(request: Client, email: string, submittedPassword = password) {
     const csrf = await request("/api/auth/csrf"); assert.equal(csrf.status, 200);
     return request("/api/auth/callback/credentials", "POST", new URLSearchParams({ csrfToken: csrf.data.csrfToken, email, password: submittedPassword, callbackUrl: base + "/profile" }), true);
@@ -59,7 +64,7 @@ test("connected discovery, storefronts, admin, availability, reviews and recover
   }
   async function user(label: string, role: UserRole, isActive = true) {
     const email = `${label}-${suffix}@example.com`; fixtureEmails.push(email);
-    const record = await db.user.create({ data: { name: `Modules ${label} ${suffix}`, email, emailVerified: new Date(), passwordHash, role, isActive } });
+    const record = await db.user.create({ data: { name: `Modules ${label} ${suffix}`, email, emailVerified: new Date(), phone: "9000000000", passwordHash, role, isActive } });
     userIds.push(record.id); return record;
   }
   async function boutique(ownerId: string, label: string, status: BoutiqueStatus = "APPROVED") {
@@ -85,7 +90,7 @@ test("connected discovery, storefronts, admin, availability, reviews and recover
     await redirectedPage(anonymous, "/boutique/dashboard", "/login?intent=boutique");
     await redirectedPage(customerClient, "/boutique/dashboard", "/profile");
     await redirectedPage(pendingClient, "/boutique/dashboard", "/boutique/pending");
-    await redirectedPage(ownerClient, "/my-rentals", "/profile");
+    await authorizedPage(ownerClient, "/my-rentals");
     await authorizedPage(customerClient, "/my-rentals");
     await authorizedPage(ownerClient, "/boutique/dashboard");
     await authorizedPage(pendingClient, "/boutique/settings");
@@ -178,24 +183,26 @@ test("connected discovery, storefronts, admin, availability, reviews and recover
 
     const pickup = new Date(Date.now() + 3 * 86400000), returned = new Date(pickup.getTime() + 4 * 86400000);
     const order = { variantId, quantity: 3, pickupAt: pickup.toISOString(), returnAt: returned.toISOString() };
-    assert.equal((await anonymous("/api/availability")).status, 401, "Guests cannot access availability.");
+    assert.equal((await anonymous("/api/availability")).status, 400, "Public availability still validates required parameters.");
     assert.equal((await anonymous("/api/recommendations", "POST", {})).status, 401, "Guests cannot access date-based recommendations.");
     const quote = (start = pickup, end = returned, quantity = 1) => customerClient(`/api/availability?${new URLSearchParams({ variantId, quantity: String(quantity), pickupAt: start.toISOString(), returnAt: end.toISOString() })}`);
     const initialQuote = await quote(pickup, returned, 3); assert.equal(initialQuote.status, 200); assert.equal(initialQuote.data.available, true); assert.equal(initialQuote.data.availableUnits, 3);
     async function reservation(start: Date, end: Date, quantity: number, status: "CONFIRMED" | "COMPLETED" = "CONFIRMED", customerId = customer.id) {
-      return db.booking.create({ data: { boutiqueId: shop.id, customerId, status, pickupAt: start, returnAt: end, rentalMinor: 20000, depositMinor: 20000, ...(status === "COMPLETED" ? { returnedAt: end, completedAt: end } : {}), items: { create: { variantId, quantity, productNameSnap: red.name, sizeSnapshot: "L", categorySnapshot: "OTHER", rentalMinor: 20000, depositMinor: 20000 } } } });
+      return db.booking.create({ data: { boutiqueId: shop.id, customerId, status, pickupAt: start, returnAt: end, rentalMinor: 20000, depositMinor: 20000, ...(status === "COMPLETED" ? { pickedUpAt: start, returnedAt: end, completedAt: end } : {}), items: { create: { variantId, quantity, productNameSnap: red.name, sizeSnapshot: "L", categorySnapshot: "OTHER", rentalMinor: 20000, depositMinor: 20000 } } } });
     }
     await reservation(pickup, new Date(pickup.getTime() + 86400000), 2);
     await reservation(new Date(pickup.getTime() + 2 * 86400000), new Date(pickup.getTime() + 3 * 86400000), 2);
     const peak = await quote(); assert.equal(peak.status, 200); assert.equal(peak.data.availableUnits, 1, "Disjoint reservations consume peak stock, not their summed quantity.");
-    assert.equal(peak.data.rentalDays, 4); assert.equal(peak.data.rentalMinor, 40000); assert.equal(peak.data.depositMinor, 20000); assert.equal(peak.data.totalMinor, 60000);
+    assert.equal(peak.data.rentalDays, 4); assert.equal(peak.data.rentalMinor, 40000); assert.equal(peak.data.depositMinor, undefined); assert.equal(peak.data.totalMinor, 40000);
     assert.equal((await quote(pickup, returned, 2)).data.available, false);
-    assert.equal((await customerClient("/api/bookings", "POST", order)).status, 409, "Booking must recheck stock after a previously available quote.");
-    const booked = await customerClient("/api/bookings", "POST", { ...order, quantity: 1 }); assert.equal(booked.status, 201, JSON.stringify(booked.data));
+    assert.equal((await requestReservation(customerClient, order)).status, 409, "Booking must recheck stock after a previously available quote.");
+    const booked = await requestReservation(customerClient, { ...order, quantity: 1 }); assert.equal(booked.status, 201, JSON.stringify(booked.data));
     assert.equal(booked.data.rentalMinor, 40000); assert.equal((await quote()).data.availableUnits, 0);
     assert.equal((await customerClient("/api/bookings", "PATCH", { id: booked.data.id, version: booked.data.version, reason: "Restore stock after test" })).status, 200);
     const gapStart = new Date(pickup.getTime() + 86400000), gapEnd = new Date(pickup.getTime() + 2 * 86400000);
-    const gap = await quote(gapStart, gapEnd, 3); assert.equal(gap.data.availableUnits, 3); assert.equal(gap.data.available, true, "Half-open intervals permit handovers at matching boundaries.");
+    const gap = await quote(gapStart, gapEnd, 3); assert.equal(gap.data.availableUnits, 1); assert.equal(gap.data.available, false, "The requested cleaning buffer overlaps the following reservation.");
+    const before = await quote(new Date(pickup.getTime() - 2 * 86400000), new Date(pickup.getTime() - 86400000), 3);
+    assert.equal(before.data.availableUnits, 3, "An inventory interval ending exactly at the next pickup is permitted.");
     assert.equal((await quote(returned, pickup)).status, 400);
 
     const completed = await reservation(new Date(Date.now() - 10 * 86400000), new Date(Date.now() - 8 * 86400000), 1, "COMPLETED");
@@ -224,7 +231,7 @@ test("connected discovery, storefronts, admin, availability, reviews and recover
     assert.equal((await adminClient("/api/admin/categories", "PATCH", { id: category.id, version: category.version, name: category.name, slug: category.slug, isActive: true })).status, 409);
     category = changedCategory.data;
     assert.equal((await discovery()).data.total, 1); assert.equal((await anonymous(`/api/boutiques/${shop.id}`)).data.productCount, 1);
-    assert.equal((await quote()).status, 404); assert.equal((await customerClient("/api/bookings", "POST", { ...order, quantity: 1 })).status, 404);
+    assert.equal((await quote()).status, 404); assert.equal((await requestReservation(customerClient, { ...order, quantity: 1 })).status, 409);
     assert.ok(!(await anonymous("/api/categories")).data.some((item: { id: string }) => item.id === category.id), "Inactive categories are absent from customer choices.");
     const restoredCategory = await adminClient("/api/admin/categories", "PATCH", { id: category.id, version: category.version, name: category.name, slug: category.slug, isActive: true });
     assert.equal(restoredCategory.status, 200); category = restoredCategory.data;
@@ -258,6 +265,9 @@ test("connected discovery, storefronts, admin, availability, reviews and recover
     for (let attempt = 0; attempt < 3; attempt++) assert.ok([200, 503].includes((await anonymous("/api/auth/forgot-password", "POST", { email: recoveryEmail })).status));
     assert.equal((await anonymous("/api/auth/forgot-password", "POST", { email: recoveryEmail })).status, 429, "Recovery requests have a persistent rate limit.");
   } finally {
+    await db.supportRequest.deleteMany({ where: { userId: { in: userIds } } });
+    await db.notification.deleteMany({ where: { userId: { in: userIds } } });
+    await db.basketItem.deleteMany({ where: { userId: { in: userIds } } });
     await db.auditLog.deleteMany({ where: { actorId: { in: userIds } } });
     await db.booking.deleteMany({ where: { boutiqueId: { in: boutiqueIds } } });
     await db.product.deleteMany({ where: { boutiqueId: { in: boutiqueIds } } });

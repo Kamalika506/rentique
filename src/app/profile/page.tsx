@@ -8,12 +8,14 @@ import Link from "next/link";
 import { ArrowRight, Heart, Package, UserRound } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
+import { ReservationRequirements } from "@/features/marketplace/reservation-review";
 
 type Customer = {
   name: string;
   email: string;
   phone: string;
   role?: string;
+  emailVerified?: boolean;
 };
 
 export default function ProfilePage() {
@@ -73,6 +75,7 @@ export default function ProfilePage() {
           <Link className="underline" href="/change-password">Change password</Link>
           <SignOutButton className="underline" />
         </div>}
+        {customer.role !== "ADMIN" && <ReservationRequirements />}
         <section className="rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-6 sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
             <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-[#f3efe9] text-[#4c2544]">
@@ -200,7 +203,7 @@ export default function ProfilePage() {
           )}
         </section>
 
-        {customer.role === "CUSTOMER" && (
+        {customer.role !== "ADMIN" && (
           <div className="mt-8 grid gap-5 sm:grid-cols-2">
             <Link
               href="/wishlist"

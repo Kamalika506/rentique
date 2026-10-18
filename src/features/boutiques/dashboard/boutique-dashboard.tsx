@@ -60,7 +60,7 @@ function Overview({ data, onExport }: { data: DashboardSnapshot; onExport: () =>
     { label: "Upcoming pickups", value: summary.upcomingPickups, hint: "Confirmed · next 7 days", href: "?view=schedule#pickups" },
     { label: "Upcoming returns", value: summary.upcomingReturns, hint: "Scheduled · next 7 days", href: "?view=schedule#returns" },
     { label: "Completed rentals", value: summary.completedRentals, hint: "Completed bookings · all time", href: "?view=bookings&filter=COMPLETED" },
-    { label: "Completed rental revenue", value: money(summary.completedRentalRevenueMinor, data), hint: "Rental amounts only · excludes deposits", href: "?view=bookings&filter=COMPLETED" },
+    { label: "Estimated listed rental value", value: money(summary.completedRentalRevenueMinor, data), hint: "Informational estimates on completed rentals", href: "?view=bookings&filter=COMPLETED" },
   ];
   return <>
     <div className={styles.metrics}>{metrics.map((metric) => <Link key={metric.label} href={metric.href.startsWith("/") ? metric.href : `/boutique/dashboard${metric.href}`} className={styles.metric}><h2 className={styles.metricLabel}>{metric.label}<ArrowUpRight size={14} /></h2><p className={styles.metricValue}>{metric.value}</p><p className={styles.metricHint}>{metric.hint}</p></Link>)}</div>

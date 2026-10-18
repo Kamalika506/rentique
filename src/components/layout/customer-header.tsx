@@ -12,9 +12,13 @@ import {
 } from "lucide-react";
 
 const navLinks = [
-  { label: "Discover", href: "/" },
+  { label: "Discover", href: "/marketplace" },
   { label: "Boutiques", href: "/boutiques" },
   { label: "Occasion styling", href: "/styling" },
+  { label: "My rentals", href: "/my-rentals" },
+  { label: "Basket", href: "/basket" },
+  { label: "Updates", href: "/notifications" },
+  { label: "Help", href: "/support" },
 ];
 
 export default function CustomerHeader() {
@@ -25,15 +29,8 @@ export default function CustomerHeader() {
   const isBoutiqueOwner = user?.role === "BOUTIQUE_OWNER";
   const isAdmin = user?.role === "ADMIN";
   const homeHref = isBoutiqueOwner ? "/boutique-home" : isAdmin ? "/admin-home" : "/";
-  const showCustomerLinks = status !== "loading" && (!user || user.role === "CUSTOMER");
-  const links = isBoutiqueOwner ? [
-    { label: "Home", href: "/boutique-home" },
-    { label: "Workspace", href: "/boutique/dashboard" },
-    { label: "Inventory", href: "/boutique/products" },
-    { label: "Bookings", href: "/boutique/bookings" },
-    { label: "Rental schedule", href: "/boutique/calendar" },
-    { label: "Boutique settings", href: "/boutique/settings" },
-  ] : isAdmin ? [{ label: "Home", href: "/admin-home" }, { label: "Admin workspace", href: "/admin" }] : showCustomerLinks ? navLinks : [];
+  const showCustomerLinks = status !== "loading" && (!user || user.role !== "ADMIN");
+  const links = isBoutiqueOwner ? [{ label: "Workspace", href: "/boutique/dashboard" }, ...navLinks.filter(link => link.href !== "/boutiques")] : isAdmin ? [{ label: "Admin workspace", href: "/admin" }, { label: "Updates", href: "/notifications" }] : showCustomerLinks ? navLinks : [];
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#e4dfd7] bg-[#fffdf9]/95 backdrop-blur">

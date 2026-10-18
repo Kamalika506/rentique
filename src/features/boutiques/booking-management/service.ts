@@ -1,14 +1,17 @@
 /** UI/demo vocabulary only. Map Member 2's canonical definitions when supplied. */
-export type BoutiqueBookingStatus = "PENDING" | "CONFIRMED" | "PICKED_UP" | "RETURNED" | "COMPLETED" | "CANCELLED" | "REJECTED";
-export const bookingStatusLabels: Record<BoutiqueBookingStatus, string> = { PENDING: "Pending", CONFIRMED: "Confirmed", PICKED_UP: "Picked up", RETURNED: "Returned", COMPLETED: "Completed", CANCELLED: "Cancelled", REJECTED: "Rejected" };
+export type BoutiqueBookingStatus = "PENDING" | "CONFIRMED" | "PICKED_UP" | "RETURNED" | "COMPLETED" | "CANCELLED" | "REJECTED" | "EXPIRED";
+export const bookingStatusLabels: Record<BoutiqueBookingStatus, string> = { PENDING: "Requested", CONFIRMED: "Confirmed", PICKED_UP: "Collected", RETURNED: "Returned; awaiting inspection", COMPLETED: "Completed", CANCELLED: "Cancelled", REJECTED: "Rejected", EXPIRED: "Expired" };
 export type InspectionCondition = "GOOD" | "MINOR_DAMAGE" | "MAJOR_DAMAGE";
 export type ManualRefundStatus = "PENDING" | "PARTIALLY_REFUNDED" | "REFUNDED" | "WITHHELD" | "NOT_REQUIRED";
-export type LifecycleAction = "CONFIRM" | "REJECT" | "PICK_UP" | "RETURN" | "COMPLETE" | "CANCEL" | "RECORD_INSPECTION" | "RECORD_REFUND";
-export type LifecycleCommand = { action: "CONFIRM" | "PICK_UP" | "RETURN" | "COMPLETE" } | { action: "REJECT" | "CANCEL"; reason: string } | { action: "RECORD_INSPECTION"; condition: InspectionCondition; notes: string } | { action: "RECORD_REFUND"; status: ManualRefundStatus; notes: string };
+export type LifecycleAction = "CONFIRM" | "REJECT" | "PICK_UP" | "RETURN" | "COMPLETE" | "CANCEL" | "RECORD_INSPECTION" | "RECORD_REFUND" | "MARK_READY";
+export type LifecycleCommand = { action: "CONFIRM" | "PICK_UP" | "COMPLETE" | "MARK_READY" } | { action: "RETURN"; items?: { itemId: string; quantity: number }[] } | { action: "REJECT" | "CANCEL"; reason: string } | { action: "RECORD_INSPECTION"; condition: InspectionCondition; notes: string } | { action: "RECORD_REFUND"; status: ManualRefundStatus; notes: string };
 export interface BoutiqueBooking {
   id: string; boutiqueId: string; status: BoutiqueBookingStatus; version: number;
   customer: { name: string; email: string; phone: string };
-  products: { id: string; name: string; size: string; quantity: number; rentalMinor: number; depositMinor: number }[];
+  products: { id: string; itemId?: string; returnedQuantity?: number; name: string; size: string; quantity: number; rentalMinor: number; depositMinor: number }[];
+  partiallyReturned?: boolean; requestExpiresAt?: string;
+  reviews?: { productId: string; rating: number; isHidden: boolean }[];
+  timeline?: { id: string; action: string; fromStatus: string | null; toStatus: string | null; createdAt: string }[];
   pickupAt: string; returnAt: string; createdAt: string; rentalMinor: number; depositMinor: number;
   allowedActions: LifecycleAction[]; rejectionReason?: string; cancellationReason?: string;
   pickedUpAt?: string; returnedAt?: string; completedAt?: string;

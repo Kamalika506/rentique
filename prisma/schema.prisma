@@ -46,6 +46,7 @@ enum BookingStatus {
   COMPLETED
   REJECTED
   CANCELLED
+  EXPIRED
 }
 
 enum InspectionCondition {
@@ -73,6 +74,7 @@ enum BookingEventAction {
   INSPECTION_RECORDED
   REFUND_UPDATED
   NOTE_ADDED
+  EXPIRED
 }
 
 enum BoutiqueReviewAction {
@@ -115,6 +117,10 @@ model User {
   reviewedBoutiques   Boutique[]            @relation("BoutiqueReviewedBy")
   auditLogs           AuditLog[]
   authTokens          AuthToken[]
+  basketItems         BasketItem[]
+  bookingQuotes       BookingQuote[]
+  notifications       Notification[]
+  supportRequests     SupportRequest[]
 
   @@index([role, isActive])
   @@index([createdAt])
@@ -178,6 +184,8 @@ model Boutique {
   postalCode   String            @db.VarChar(12)
   categories   ProductCategory[]
   socialLink   String?           @db.VarChar(300)
+  openingHours String            @default("") @db.VarChar(1000)
+  rentalPolicy String            @default("") @db.VarChar(3000)
 
   status          BoutiqueStatus @default(PENDING)
   rejectionReason String?        @db.Text
@@ -231,6 +239,8 @@ model Product {
   occasionTags String[]        @default([])
   colours      String[]        @default([])
   fabricStyle  String          @db.VarChar(200)
+  garmentType  String          @default("other") @db.VarChar(40)
+  includedPieces String[]      @default([])
 
   // Prices are integer paise, never floating-point currency.
   rentalPriceMinor BigInt
@@ -263,6 +273,7 @@ model ProductVariant {
   size     String  @db.VarChar(80)
   sku      String? @unique @db.VarChar(100)
   quantity Int
+  measurements String @default("") @db.VarChar(1000)
 
   // Optional overrides for this size/SKU.
   rentalPriceMinor BigInt?
@@ -276,6 +287,7 @@ model ProductVariant {
 
   product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   bookingItems BookingItem[]
+  basketItems BasketItem[]
 
   @@unique([productId, size])
   @@index([productId, archived])
@@ -318,6 +330,11 @@ model Booking {
   pickedUpAt  DateTime? @db.Timestamptz(6)
   returnedAt  DateTime? @db.Timestamptz(6)
   completedAt DateTime? @db.Timestamptz(6)
+  requestExpiresAt DateTime? @db.Timestamptz(6)
+  stockReadyAt DateTime? @db.Timestamptz(6)
+  turnaroundMinutes Int @default(0)
+  requestKey String? @db.VarChar(100)
+  policySnapshot Json?
 
   version   Int      @default(1)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
@@ -329,12 +346,15 @@ model Booking {
   events       BookingEvent[]
   inspection   BookingInspection?
   refundRecord ManualRefundRecord?
-  review       Review?
+  reviews      Review[]
+  notifications Notification[]
+  supportRequests SupportRequest[]
 
   @@index([customerId, createdAt])
   @@index([boutiqueId, status, createdAt])
   @@index([status, pickupAt, returnAt])
   @@index([boutiqueId, pickupAt, returnAt])
+  @@unique([customerId, requestKey])
 }
 
 model BookingItem {
@@ -342,6 +362,7 @@ model BookingItem {
   bookingId String
   variantId String
   quantity  Int
+  returnedQuantity Int @default(0)
 
   // Snapshots preserve what the customer booked, even if catalog data changes.
   productNameSnap  String          @db.VarChar(120)
@@ -427,7 +448,7 @@ model Wishlist {
 
 model Review {
   id         String   @id @default(cuid())
-  bookingId  String   @unique
+  bookingId  String
   customerId String
   productId  String
   rating     Int
@@ -442,6 +463,7 @@ model Review {
   product  Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@unique([customerId, productId, bookingId])
+  @@unique([bookingId, productId])
   @@index([productId, createdAt])
   @@index([customerId, createdAt])
 }
@@ -493,4 +515,62 @@ model RateLimitBucket {
   count Int @default(1)
   resetAt DateTime @db.Timestamptz(6)
   @@index([resetAt])
+}
+
+model BasketItem {
+  id String @id @default(cuid())
+  userId String
+  variantId String
+  quantity Int
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  @@unique([userId, variantId])
+}
+
+model BookingQuote {
+  id String @id @default(cuid())
+  userId String
+  payload Json
+  expiresAt DateTime @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([expiresAt])
+}
+
+model Notification {
+  id String @id @default(cuid())
+  userId String
+  bookingId String?
+  dedupeKey String @unique @db.VarChar(200)
+  type String @db.VarChar(50)
+  title String @db.VarChar(160)
+  message String @db.VarChar(2000)
+  href String @db.VarChar(300)
+  scheduledFor DateTime @default(now()) @db.Timestamptz(6)
+  readAt DateTime? @db.Timestamptz(6)
+  emailedAt DateTime? @db.Timestamptz(6)
+  attempts Int @default(0)
+  leaseUntil DateTime? @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  @@index([userId, scheduledFor])
+}
+
+model SupportRequest {
+  id String @id @default(cuid())
+  userId String
+  bookingId String?
+  subject String @db.VarChar(160)
+  message String @db.VarChar(3000)
+  status String @default("OPEN") @db.VarChar(30)
+  response String @default("") @db.VarChar(3000)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
 }

@@ -29,6 +29,8 @@ async function main() {
   check("Gemini configuration", geminiKey && geminiModel, geminiKey || geminiModel, "Set both GEMINI_API_KEY and GEMINI_MODEL for AI preferences. Without either, styling uses the rules fallback.");
   const mailKeys = ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"], anyMail = mailKeys.some(configured), completeMail = mailKeys.every(configured) && mailConfiguration() !== null;
   check("Optional email notifications", completeMail, false, "Set SMTP_HOST, SMTP_PORT, SMTP_USER and SMTP_PASSWORD to send using your existing email account. Approval works without email.");
+  check("Reservation email verification", completeMail && applicationUrl() !== null, mode === "production", "Reservations require verified email. Configure working SMTP and APP_URL before public launch.");
+  check("Reservation scheduler secret", configured("JOBS_SECRET") && (process.env.JOBS_SECRET?.length ?? 0) >= 32, false, "For HTTP scheduling, configure JOBS_SECRET and schedule POST /api/internal/notifications every five minutes. A trusted CLI scheduler can instead run jobs:reservations without this secret.");
   check("Email verification policy", process.env.REQUIRE_EMAIL_VERIFICATION !== "true" || (completeMail && applicationUrl() !== null), process.env.REQUIRE_EMAIL_VERIFICATION === "true", "Configure SMTP and a valid APP_URL before requiring verification, or keep REQUIRE_EMAIL_VERIFICATION=false.");
   check("SMTP port", !anyMail || [465, 587].includes(Number(process.env.SMTP_PORT ?? 587)), anyMail, "Use SMTP_PORT=587 (STARTTLS) or 465 (TLS).");
   const googleId = configured("AUTH_GOOGLE_ID"), googleSecret = configured("AUTH_GOOGLE_SECRET");

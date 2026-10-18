@@ -32,7 +32,7 @@ function eligible(product: InventoryCandidate, input: RecommendationInput, now: 
     && checkedAt <= now && now - checkedAt <= 60000
     && (!input.city || normalized(product.city) === normalized(input.city))
     && product.occasionTags.some((occasion) => normalized(occasion) === input.occasion)
-    && (product.kind === "outfit" ? (input.outfitType === "any" || normalized(product.outfitType) === input.outfitType)
+    && (product.kind === "outfit" ? (!input.size || Boolean(product.availableSizes?.some(size => normalized(size) === normalized(input.size!)))) && (input.outfitType === "any" || normalized(product.outfitType) === input.outfitType)
       && (normalized(input.colourPreference) === "any" || product.colours.some((colour) => normalized(colour) === normalized(input.colourPreference)))
       : product.kind === "jewellery" && input.jewelleryPreference !== "none" && (input.jewelleryPreference === "any" || normalized(product.jewelleryType) === input.jewelleryPreference));
 }
@@ -47,11 +47,11 @@ export function selectLooks(products: InventoryCandidate[], input: Recommendatio
   const order = (a: InventoryCandidate, b: InventoryCandidate) => score(b) - score(a) || a.rentalMinor - b.rentalMinor || a.id.localeCompare(b.id);
   const outfits = candidates.filter((product) => product.kind === "outfit").sort(order);
   const jewellery = candidates.filter((product) => product.kind === "jewellery").sort(order);
-  const project = (product: InventoryCandidate) => ({ id: product.id, name: product.name, boutiqueId: product.boutiqueId, boutiqueName: product.boutiqueName, kind: product.kind, rentalMinor: product.rentalMinor });
+  const project = (product: InventoryCandidate) => ({ id: product.id, name: product.name, boutiqueId: product.boutiqueId, boutiqueName: product.boutiqueName, kind: product.kind, rentalMinor: product.rentalMinor, ...(product.variantId ? { variantId: product.variantId, size: product.size } : {}) });
   const looks: RecommendationResponse["looks"] = [];
   for (const outfit of outfits) {
     const accessory = input.lookMode === "complete-look" && input.jewelleryPreference !== "none"
-      ? jewellery.find((item) => item.rentalMinor <= budget - outfit.rentalMinor) : undefined;
+      ? jewellery.find((item) => item.boutiqueId === outfit.boutiqueId && item.rentalMinor <= budget - outfit.rentalMinor) : undefined;
     if (input.lookMode === "complete-look" && input.jewelleryPreference !== "none" && !accessory) continue;
     const items = accessory ? [outfit, accessory] : [outfit];
     looks.push({ products: items.map(project), totalRentalMinor: items.reduce((total, item) => total + item.rentalMinor, 0) });
@@ -85,6 +85,6 @@ export function createRecommendationService(options: { inventory: Recommendation
       }
     }
     const looks = selectLooks(inventory, input, preferences, (options.now ?? Date.now)());
-    return respond(looks.length ? "OK" : "NO_MATCHES", looks.length ? "Rental prices and availability were checked by the inventory service; checkout must revalidate them. Security deposits are separate from the rental budget." : "No verified products satisfy all requested constraints and the combined rental budget.", looks);
+    return respond(looks.length ? "OK" : "NO_MATCHES", looks.length ? "Full-period rental estimates and availability were checked. Review a fresh estimate before requesting. Collection and return take place at the boutique; Rentique does not collect payments." : "No verified products satisfy all requested constraints and the combined rental budget.", looks);
   } };
 }

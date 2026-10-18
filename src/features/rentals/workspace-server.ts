@@ -46,7 +46,7 @@ export async function calendar(request: Request) {
   const start = new Date(Date.UTC(year, number - 1, 1) - 7 * 86400000), end = new Date(Date.UTC(year, number, 1) + 7 * 86400000);
   const bookings = await prisma.booking.findMany({ where: { boutiqueId: boutique.id, status: { notIn: ["CANCELLED", "REJECTED"] }, pickupAt: { lt: end }, returnAt: { gt: start } }, include: bookingInclude });
   const day = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: boutique.timezone });
-  return bookings.map(b => ({ bookingId: b.id, customer: b.customer.name ?? "Customer", productLabel: b.items.map(item => item.productNameSnap).join(", "), status: b.status, startDate: day(b.pickupAt), endDate: day(b.returnAt), pickupDate: day(b.pickupAt), returnDate: day(b.returnAt) }));
+  return bookings.filter(b => bookingRecord(b).status !== "EXPIRED").map(b => ({ bookingId: b.id, customer: b.customer.name ?? "Customer", productLabel: b.items.map(item => item.productNameSnap).join(", "), status: b.status, startDate: day(b.pickupAt), endDate: day(b.returnAt), pickupDate: day(b.pickupAt), returnDate: day(b.returnAt) }));
 }
 export async function dashboard() {
   const { boutique } = await ownedBoutique();

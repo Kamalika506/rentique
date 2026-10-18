@@ -11,6 +11,7 @@ function demoActions(booking: Pick<BoutiqueBooking, "status" | "inspection">): L
     case "PICKED_UP": return ["RETURN"];
     case "RETURNED": return ["RECORD_INSPECTION", ...(booking.inspection ? ["COMPLETE" as const] : []), "RECORD_REFUND"];
     case "COMPLETED": case "CANCELLED": case "REJECTED": return ["RECORD_REFUND"];
+    case "EXPIRED": return [];
   }
 }
 export const demoBookings: BoutiqueBooking[] = buildDemoDashboardSnapshot().recentBookings.map((booking, index) => ({

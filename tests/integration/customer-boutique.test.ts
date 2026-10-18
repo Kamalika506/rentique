@@ -16,8 +16,8 @@ test("customer orders reach their boutique and lifecycle updates reach the custo
   const userIds: string[] = [];
   function client() {
     const cookies = new Map<string, string>();
-    return async (path: string, method = "GET", body?: unknown, form = false) => {
-      const response = await fetch(base + path, { method, redirect: "manual", headers: { Origin: base, Cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join("; "), ...(body ? { "Content-Type": form ? "application/x-www-form-urlencoded" : "application/json" } : {}) }, body: body ? form ? String(body) : JSON.stringify(body) : undefined });
+    return async (path: string, method = "GET", body?: unknown, form = false, extraHeaders: Record<string, string> = {}) => {
+      const response = await fetch(base + path, { method, redirect: "manual", headers: { ...extraHeaders, Origin: base, Cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join("; "), ...(body ? { "Content-Type": form ? "application/x-www-form-urlencoded" : "application/json" } : {}) }, body: body ? form ? String(body) : JSON.stringify(body) : undefined });
       for (const cookie of response.headers.getSetCookie()) { const pair = cookie.split(";")[0], equals = pair.indexOf("="); cookies.set(pair.slice(0, equals), pair.slice(equals + 1)); }
       const text = await response.text();
       let data; try { data = JSON.parse(text); } catch { data = text; }
@@ -25,6 +25,11 @@ test("customer orders reach their boutique and lifecycle updates reach the custo
     };
   }
   type Client = ReturnType<typeof client>;
+  async function requestReservation(request: Client, order: { variantId: string; quantity: number; pickupAt: string; returnAt: string }) {
+    const quote = await request("/api/quotes", "POST", { items: [{ variantId: order.variantId, quantity: order.quantity }], pickupAt: order.pickupAt, returnAt: order.returnAt });
+    if (quote.status !== 201) return quote;
+    return request("/api/bookings", "POST", { quoteId: quote.data.quoteId, acceptedTerms: true }, false, { "Idempotency-Key": randomUUID() });
+  }
   async function login(request: Client, email: string) {
     const csrf = await request("/api/auth/csrf");
     const result = await request("/api/auth/callback/credentials", "POST", new URLSearchParams({ csrfToken: csrf.data.csrfToken, email, password, callbackUrl: base + "/profile" }), true);
@@ -40,6 +45,7 @@ test("customer orders reach their boutique and lifecycle updates reach the custo
     const email = `customer-${suffix}@example.com`;
     const registration = await anonymous("/api/register", "POST", { name: "Test customer", email, password });
     assert.equal(registration.status, 201); userIds.push(registration.data.user.id);
+    await db.user.update({ where: { id: registration.data.user.id }, data: { emailVerified: new Date(), phone: "9000000000" } });
     await login(customerClient, email); await login(ownerClient, owner.email!); await login(otherClient, foreign.email!); await login(adminClient, admin.email!);
     assert.equal((await anonymous("/api/bookings")).status, 401);
     assert.equal((await customerClient("/api/boutique/products")).status, 403);
@@ -65,11 +71,11 @@ test("customer orders reach their boutique and lifecycle updates reach the custo
     const candidates = await databaseInventory.search(recommendationQuery, new AbortController().signal);
     assert.equal(candidates.find(candidate => candidate.id === product.data.id)?.rentalMinor, 30000);
     assert.equal((await anonymous("/api/bookings", "POST", order)).status, 401);
-    const simultaneous = await Promise.all([customerClient("/api/bookings", "POST", order), customerClient("/api/bookings", "POST", order)]);
+    const simultaneous = await Promise.all([requestReservation(customerClient, order), requestReservation(customerClient, order)]);
     assert.deepEqual(simultaneous.map(result => result.status).sort(), [201, 409]);
     let booking = simultaneous.find(result => result.status === 201)!.data;
     assert.ok(!(await databaseInventory.search(recommendationQuery, new AbortController().signal)).some(candidate => candidate.id === product.data.id), "recommendations exclude reserved stock");
-    assert.equal(booking.rentalMinor, 30000); assert.equal(booking.depositMinor, 25000);
+    assert.equal(booking.rentalMinor, 30000); assert.equal(booking.depositMinor, 0);
     assert.equal((await ownerClient("/api/boutique/bookings")).data.items[0].id, booking.id);
     assert.equal((await otherClient("/api/boutique/bookings?id=" + booking.id)).status, 404);
     assert.equal((await otherClient("/api/boutique/bookings", "PATCH", { id: booking.id, version: booking.version, command: { action: "CONFIRM" } })).status, 404);
@@ -84,6 +90,7 @@ test("customer orders reach their boutique and lifecycle updates reach the custo
     assert.equal((await ownerClient("/api/boutique/bookings", "PATCH", { id: booking.id, version: 1, command: { action: "CANCEL", reason: "Stale command" } })).status, 409);
     const calendar = await ownerClient("/api/boutique/calendar?month=" + pickup.toISOString().slice(0, 7));
     assert.ok(calendar.data.some((event: { bookingId: string }) => event.bookingId === booking.id));
+    await db.booking.update({ where: { id: booking.id }, data: { pickupAt: new Date(Date.now() - 60000) } });
     await action({ action: "PICK_UP" }); await action({ action: "RETURN" });
     assert.equal((await ownerClient("/api/boutique/bookings", "PATCH", { id: booking.id, version: booking.version, command: { action: "COMPLETE" } })).status, 409);
     await action({ action: "RECORD_INSPECTION", condition: "GOOD", notes: "Returned in good condition" }); await action({ action: "COMPLETE" });
@@ -91,13 +98,18 @@ test("customer orders reach their boutique and lifecycle updates reach the custo
     const snapshot = await ownerClient("/api/boutique/dashboard");
     assert.equal(snapshot.data.summary.completedRentalRevenueMinor, 30000);
     assert.equal((await ownerClient("/api/boutique/analytics")).data.bookings[0].status, "COMPLETED");
-    const next = await customerClient("/api/bookings", "POST", order); assert.equal(next.status, 201);
+    await db.booking.update({ where: { id: booking.id }, data: { returnedAt: new Date(Date.now() - 25 * 3600000) } });
+    await action({ action: "MARK_READY" });
+    const next = await requestReservation(customerClient, order); assert.equal(next.status, 201);
     assert.equal((await customerClient("/api/bookings", "PATCH", { id: next.data.id, version: next.data.version, reason: "Plans changed" })).status, 200);
     const archive = await ownerClient("/api/boutique/products", "PATCH", { id: product.data.id, version: product.data.version, archived: true }); assert.equal(archive.status, 200);
     assert.equal((await anonymous("/api/products?id=" + product.data.id)).status, 404);
-    assert.equal((await customerClient("/api/bookings", "POST", order)).status, 404);
+    assert.equal((await requestReservation(customerClient, order)).status, 409);
     assert.equal((await customerClient("/api/bookings")).data.length, 2, "archiving preserves customer order history");
   } finally {
+    await db.supportRequest.deleteMany({ where: { userId: { in: userIds } } });
+    await db.notification.deleteMany({ where: { userId: { in: userIds } } });
+    await db.basketItem.deleteMany({ where: { userId: { in: userIds } } });
     await db.booking.deleteMany({ where: { customerId: { in: userIds } } });
     await db.product.deleteMany({ where: { boutique: { ownerId: { in: userIds } } } });
     await db.boutique.deleteMany({ where: { ownerId: { in: userIds } } });
