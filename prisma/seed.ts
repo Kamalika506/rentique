@@ -401,7 +401,7 @@ async function seedProduct(boutiqueId: string, product: SeedProduct): Promise<"c
         depositMinor: product.depositMinor,
         rentalPriceUnit: product.rentalPriceUnit,
         variants: {
-          create: { size: product.size, quantity: product.quantity },
+          create: { size: product.size, quantity: product.quantity, inventoryUnits: { create: Array.from({ length: product.quantity }, (_, index) => ({ code: `${product.size.replace(/[^A-Za-z0-9-]/g, "-").slice(0, 70) || "UNIT"}-${String(index + 1).padStart(3, "0")}` })) } },
         },
       },
     });

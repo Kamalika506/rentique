@@ -4,17 +4,17 @@ export const bookingStatusLabels: Record<BoutiqueBookingStatus, string> = { PEND
 export type InspectionCondition = "GOOD" | "MINOR_DAMAGE" | "MAJOR_DAMAGE";
 export type ManualRefundStatus = "PENDING" | "PARTIALLY_REFUNDED" | "REFUNDED" | "WITHHELD" | "NOT_REQUIRED";
 export type LifecycleAction = "CONFIRM" | "REJECT" | "PICK_UP" | "RETURN" | "COMPLETE" | "CANCEL" | "RECORD_INSPECTION" | "RECORD_REFUND" | "MARK_READY";
-export type LifecycleCommand = { action: "CONFIRM" | "PICK_UP" | "COMPLETE" | "MARK_READY" } | { action: "RETURN"; items?: { itemId: string; quantity: number }[] } | { action: "REJECT" | "CANCEL"; reason: string } | { action: "RECORD_INSPECTION"; condition: InspectionCondition; notes: string } | { action: "RECORD_REFUND"; status: ManualRefundStatus; notes: string };
+export type LifecycleCommand = { action: "CONFIRM" | "PICK_UP" | "COMPLETE" | "MARK_READY" } | { action: "RETURN"; items?: { itemId: string; quantity?: number; unitIds?: string[] }[] } | { action: "REJECT" | "CANCEL"; reason: string } | { action: "RECORD_INSPECTION"; condition: InspectionCondition; notes: string } | { action: "RECORD_REFUND"; status: ManualRefundStatus; notes: string };
 export interface BoutiqueBooking {
   id: string; boutiqueId: string; status: BoutiqueBookingStatus; version: number;
   customer: { name: string; email: string; phone: string };
-  products: { id: string; itemId?: string; returnedQuantity?: number; name: string; size: string; quantity: number; rentalMinor: number; depositMinor: number }[];
+  products: { id: string; itemId?: string; returnedQuantity?: number; name: string; size: string; quantity: number; rentalMinor: number; depositMinor: number; units?: { id: string; code: string; status: string; returnedAt?: string; releasedAt?: string }[] }[];
   partiallyReturned?: boolean; requestExpiresAt?: string;
   reviews?: { productId: string; rating: number; isHidden: boolean }[];
   timeline?: { id: string; action: string; fromStatus: string | null; toStatus: string | null; createdAt: string }[];
   pickupAt: string; returnAt: string; createdAt: string; rentalMinor: number; depositMinor: number;
   allowedActions: LifecycleAction[]; rejectionReason?: string; cancellationReason?: string;
-  pickedUpAt?: string; returnedAt?: string; completedAt?: string;
+  pickedUpAt?: string; returnedAt?: string; completedAt?: string; stockReadyAt?: string;
   inspection?: { condition: InspectionCondition; notes: string; recordedAt: string };
   manualRefund?: { status: ManualRefundStatus; notes: string; recordedAt: string };
 }
