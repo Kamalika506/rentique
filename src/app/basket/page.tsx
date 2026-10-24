@@ -4,7 +4,7 @@ import Link from "next/link";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
 import { api, jsonRequest } from "@/lib/api-client";
-import { ReservationRequirements, ReservationReview, type RentalQuote } from "@/features/marketplace/reservation-review";
+import { ReservationReview, type RentalQuote } from "@/features/marketplace/reservation-review";
 type BasketItem = { id: string; variantId: string; productId: string; name: string; boutiqueName: string; size: string; quantity: number; unavailable: boolean };
 export default function BasketPage() {
   const [items, setItems] = useState<BasketItem[] | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
@@ -25,7 +25,6 @@ export default function BasketPage() {
   }
   return <div className="min-h-screen bg-[#f7f5f1]"><CustomerHeader /><main className="mx-auto max-w-4xl px-5 py-12">
     <h1 className="font-serif text-4xl text-[#4c2544]">Your reservation basket</h1><p className="mt-4 text-sm leading-7">Reserve an outfit and accessories from one boutique for the same dates. Adding items does not hold stock.</p>
-    <ReservationRequirements />
     {error && <p role="alert" className="my-5 text-red-700">{error}</p>}
     {bookingId ? <div role="status" className="mt-6 rounded-xl bg-white p-6"><h2 className="text-xl">Request sent</h2><p className="mt-2">The boutique must confirm before you visit.</p><Link className="mt-4 inline-block underline" href={"/my-rentals#" + bookingId}>Track reservation</Link></div> : <>
       {!items ? <p role="status">Loading basket…</p> : !items.length ? <p className="mt-8">Your basket is empty. <Link href="/marketplace" className="underline">Explore outfits</Link></p> : <>

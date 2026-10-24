@@ -5,7 +5,7 @@ import { ApiError, currentUser } from "@/lib/api";
 import type { Prisma } from "@/generated/prisma/client";
 import { availablePhysicalUnits, publicProductWhere } from "./availability";
 import { allocateBookingUnits, lockVariantUnits } from "./inventory-units";
-import { selectionSchema, reviewedQuoteSchema, validContactPhone } from "./customer-contracts";
+import { selectionSchema, reviewedQuoteSchema } from "./customer-contracts";
 import { rateAllowed } from "@/lib/rate-limit";
 import { rentalDays, lineAmounts } from "./rules";
 import { bookingInclude, bookingRecord } from "./records";
@@ -57,16 +57,13 @@ export async function createQuote(request: Request) {
 
 export async function createReviewedBooking(request: Request) {
   const user = await currentUser("CUSTOMER");
-  if (!user.emailVerified) throw new ApiError(403, "Verify your email from your profile before requesting a reservation.");
-  if (!validContactPhone(user.phone)) throw new ApiError(400, "Add a valid contact phone number to your profile before reserving.");
   const input = requestSchema.parse(await request.json());
   const key = z.string().min(16).max(100).parse(request.headers.get("Idempotency-Key"));
   return prisma.$transaction(async tx => {
     // Parameterized SQL and deterministic locks serialize a customer's request cap and stock writes.
     await tx.$queryRawUnsafe('SELECT id FROM "User" WHERE id = $1 FOR UPDATE', user.id);
     const active = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
-    if (!active.isActive || !active.emailVerified || active.role === "ADMIN") throw new ApiError(403, "An active customer account with verified email is required.");
-    if (!validContactPhone(active.phone)) throw new ApiError(400, "Add a valid contact phone number to your profile.");
+    if (!active.isActive || active.role === "ADMIN") throw new ApiError(403, "An active customer account is required.");
     const existing = await tx.booking.findUnique({ where: { customerId_requestKey: { customerId: user.id, requestKey: key } }, include: bookingInclude });
     if (existing) {
       const snapshot = existing.policySnapshot as { quoteId?: string } | null;

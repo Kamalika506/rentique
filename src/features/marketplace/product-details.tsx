@@ -8,7 +8,7 @@ import CustomerFooter from "@/components/layout/customer-footer";
 import { api, jsonRequest } from "@/lib/api-client";
 import { safeProductImage, type CatalogProduct } from "./catalog";
 import { bookingMoney } from "@/features/boutiques/booking-management/service";
-import { ReservationRequirements, ReservationReview, type RentalQuote } from "./reservation-review";
+import { ReservationReview, type RentalQuote } from "./reservation-review";
 import { dateTimeInputValue } from "@/features/rentals/dates";
 type Reviews = { items: { id: string; rating: number; comment: string | null; customerName: string }[]; ratingAverage: number | null; ratingCount: number };
 export default function Page() { return <Suspense fallback={<p role="status" className="p-8">Loading outfit…</p>}><Route /></Suspense>; }
@@ -63,7 +63,6 @@ function Details({ productId }: { productId: string }) {
           <p className="mt-3 text-sm">Included pieces: {product.includedPieces?.length ? product.includedPieces.join(", ") : "Not provided; confirm with the boutique."}</p>
           <p className="mt-3 text-sm">Garment measurements: {variant?.measurements || "Not provided; ask the boutique about fit."}</p>
           {!!product.colours?.length && <p className="mt-3 text-sm">Colours: {product.colours.join(", ")}</p>}
-          {canReserve && <ReservationRequirements />}
           {bookingId ? <div role="status" className="mt-7 rounded-xl border bg-white p-5"><h2>Request sent; awaiting boutique confirmation.</h2><Link href={"/my-rentals#" + bookingId} className="mt-3 inline-block underline">Track your reservation</Link></div> : <form onSubmit={estimate} className="mt-7 space-y-4 rounded-xl border bg-white p-6">
             <h2 className="font-serif text-2xl">Plan your reservation</h2><p className="text-sm">Counts show registered pieces. The date check confirms how many are ready for your dates after other reservations and shop commitments.</p>
             <label className="block text-sm">Size<select value={variantId} onChange={event => { invalidate(); setVariantId(event.target.value); setQuantity(1); }} className="mt-2 block w-full rounded border p-3" required>{product.variants.map(variant => <option key={variant.id} value={variant.id} disabled={!variant.quantity}>{variant.size} · {variant.quantity} registered pieces</option>)}</select></label>

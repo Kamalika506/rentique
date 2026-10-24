@@ -1,29 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { api, jsonRequest } from "@/lib/api-client";
 import { bookingMoney } from "@/features/boutiques/booking-management/service";
-import { validContactPhone } from "@/features/rentals/customer-contracts";
 export interface RentalQuote {
   quoteId: string; expiresAt: string; pickupAt: string; returnAt: string; rentalMinor: number; rentalDays: number;
   policy: string; openingHours: string;
   boutique: { id: string; name: string; address: string; city: string; phone?: string; contactEmail?: string };
   lines: { variantId: string; productId: string; name: string; size: string; quantity: number; rentalMinor: number }[];
-}
-export function ReservationRequirements() {
-  const [profile, setProfile] = useState<{ email: string; phone: string; emailVerified: boolean } | null>(null), [message, setMessage] = useState("");
-  useEffect(() => { const controller = new AbortController(); api<typeof profile>("/api/profile", { signal: controller.signal }).then(setProfile).catch(() => {}); return () => controller.abort(); }, []);
-  async function resend() {
-    if (!profile) return;
-    try { const result = await api<{ message: string }>("/api/auth/verification-email", jsonRequest("POST", { email: profile.email })); setMessage(result.message); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "Verification email unavailable."); }
-  }
-  if (!profile || (profile.emailVerified && validContactPhone(profile.phone))) return null;
-  return <div className="my-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm">
-    {!profile.emailVerified && <p>Verify your email before requesting a reservation. <button type="button" onClick={() => void resend()} className="underline">Send verification email</button></p>}
-    {!validContactPhone(profile.phone) && <p className="mt-2"><Link href="/profile" className="underline">Add a valid contact phone number in your profile.</Link></p>}
-    <p role="status" className="mt-2">{message}</p>
-  </div>;
 }
 export function ReservationReview({ quote, onBooked }: { quote: RentalQuote; onBooked: (id: string) => void }) {
   const [accepted, setAccepted] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(""), [expired, setExpired] = useState(false);

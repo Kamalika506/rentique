@@ -5,7 +5,7 @@ import { hash } from "bcryptjs";
 import { PrismaClient } from "../../src/generated/prisma/client";
 
 const enabled = Boolean(process.env.RENTIQUE_TEST_URL && process.env.DATABASE_URL);
-test("customer discovery, verified same-shop reservations, partial returns, reminders and reports", { skip: !enabled }, async () => {
+test("customer discovery, demo reservations without verified email or phone, partial returns, reminders and reports", { skip: !enabled }, async () => {
   const db = new PrismaClient(), base = process.env.RENTIQUE_TEST_URL!;
   assert.ok(["localhost", "127.0.0.1"].includes(new URL(base).hostname), "Use a disposable local application/database.");
   const suffix = randomUUID(), password = "Customer-features-123!", passwordHash = await hash(password, 4);
@@ -30,7 +30,8 @@ test("customer discovery, verified same-shop reservations, partial returns, remi
     const record = await db.user.create({ data: { name: "Feature " + role, email: randomUUID() + "@example.com", passwordHash, role, emailVerified: verified ? new Date() : null, phone: "9000000000" } }); users.push(record.id); return record;
   }
   try {
-    const customer = await user("CUSTOMER"), other = await user("CUSTOMER"), unverified = await user("CUSTOMER", false), owner = await user("BOUTIQUE_OWNER"), otherOwner = await user("BOUTIQUE_OWNER"), admin = await user("ADMIN");
+    const customer = await user("CUSTOMER", false), other = await user("CUSTOMER"), unverified = await user("CUSTOMER", false), owner = await user("BOUTIQUE_OWNER"), otherOwner = await user("BOUTIQUE_OWNER"), admin = await user("ADMIN");
+    await db.user.update({ where: { id: customer.id }, data: { phone: null } });
     async function shop(ownerId: string) {
       const record = await db.boutique.create({ data: { ownerId, name: "Feature shop " + suffix, description: "Verified test shop for customer reservation flows.", contactEmail: "shop@example.com", phone: "9000000000", address: "Test street", city: "Feature City " + suffix, state: "Maharashtra", postalCode: "411001", categories: ["ETHNIC_WEAR", "ACCESSORIES"], status: "APPROVED", openingHours: "Monday–Saturday 10:00–19:00", rentalPolicy: "Collect and return the full set at the shop." } }); shops.push(record.id); return record;
     }
@@ -56,7 +57,7 @@ test("customer discovery, verified same-shop reservations, partial returns, remi
     const quote = await customerApi("/api/quotes", "POST", selection); assert.equal(quote.status, 201, JSON.stringify(quote.data)); assert.equal(quote.data.rentalMinor, 44000);
     const key = randomUUID();
     assert.equal((await customerApi("/api/bookings", "POST", { quoteId: quote.data.quoteId, acceptedTerms: true, rentalMinor: 1 }, { "Idempotency-Key": key })).status, 400, "Client-supplied totals are rejected.");
-    assert.equal((await unverifiedApi("/api/bookings", "POST", { quoteId: quote.data.quoteId, acceptedTerms: true }, { "Idempotency-Key": key })).status, 403);
+    assert.equal((await unverifiedApi("/api/bookings", "POST", { quoteId: quote.data.quoteId, acceptedTerms: true }, { "Idempotency-Key": key })).status, 409, "Unverified customers still cannot use another customer's quote.");
     assert.equal((await otherApi("/api/bookings", "POST", { quoteId: quote.data.quoteId, acceptedTerms: true }, { "Idempotency-Key": key })).status, 409);
     const duplicateRequests = await Promise.all([1, 2].map(() => customerApi("/api/bookings", "POST", { quoteId: quote.data.quoteId, acceptedTerms: true }, { "Idempotency-Key": key })));
     assert.ok(duplicateRequests.every(result => result.status === 201), JSON.stringify(duplicateRequests));
