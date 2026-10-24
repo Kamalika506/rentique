@@ -14,6 +14,7 @@ import { ProductServiceError, toFormValues, type BoutiqueProduct } from "./servi
 import styles from "./inventory.module.css";
 import workspace from "../dashboard/dashboard.module.css";
 import { api } from "@/lib/api-client";
+import { UnitManagement } from "./unit-management";
 
 export function EditProductRoute() { const { id } = useParams<{ id: string }>(); return <ProductEditor key={id} id={id} />; }
 export function ProductEditor({ id }: { id?: string }) {
@@ -25,7 +26,7 @@ export function ProductEditor({ id }: { id?: string }) {
   useEffect(() => { if (!id) return; let active = true; service.getProduct(id).then((result) => { if (result.boutiqueId !== service.boutique.id) throw new ProductServiceError("NOT_FOUND", "This product is unavailable for this boutique."); if (active) { setProduct(result); setLoading(false); } }).catch((cause: unknown) => { if (active) { setError(cause instanceof ProductServiceError ? cause.message : "This product couldn't be loaded."); setLoading(false); } }); return () => { active = false; }; }, [id, service, request]);
   if (loading) return <p role="status">Loading product details…</p>;
   if (error) return <div className={workspace.panel}><div className={workspace.empty}><h1 className={workspace.heading}>Product unavailable</h1><p role="alert">{error}</p><div className={`${styles.actions} mt-5 justify-center`}><Button onClick={() => { setError(""); setLoading(true); setRequest((value) => value + 1); }}>Try again</Button><Link href="/boutique/products" className={workspace.link}>Back to products</Link></div></div></div>;
-  return <ProductForm key={product?.version ?? "new"} product={product ?? undefined} onReload={() => { setProduct(null); setLoading(true); setError(""); setRequest((value) => value + 1); }} />;
+  return <><ProductForm key={product?.version ?? "new"} product={product ?? undefined} onReload={() => { setProduct(null); setLoading(true); setError(""); setRequest((value) => value + 1); }} />{product && service.mode === "live" && <UnitManagement productId={product.id} />}</>;
 }
 
 const emptyValues: ProductFormValues = { name: "", description: "", category: "", garmentType: "other", includedPieces: "", measurements: "", rentalPriceUnit: "PER_DAY", occasionTags: "", colours: "", size: "", fabricStyle: "", rentalPriceMinor: "", depositMinor: "0", quantity: "1", images: [] };
@@ -64,7 +65,7 @@ function ProductForm({ product, onReload }: { product?: BoutiqueProduct; onReloa
           {field("includedPieces", "Included pieces", "Comma-separated, e.g. blouse, skirt, dupatta")}
           <div className={styles.wide}>{field("measurements", "Garment measurements for this size", "Include units, e.g. Bust 92 cm; waist 76 cm; length 108 cm")}</div>
         </div></section>
-        <div><section className={workspace.panel}><div className={workspace.panelHead}><h2 className={workspace.panelTitle}>Pricing & stock</h2></div><div className={styles.fields}>{field("rentalPriceMinor", "Rental price (INR) *", "Amount in rupees, up to 2 decimal places", true)}<label className={styles.label}>Pricing unit<select {...register("rentalPriceUnit")} defaultValue={product?.rentalPriceUnit ?? "PER_DAY"} className={styles.input}><option value="PER_DAY">Per day</option><option value="PER_RENTAL">Per rental</option></select></label><div className={styles.wide}>{field("quantity", "Stock quantity *", "Whole units, 0–10,000. Zero means out of stock.", true)}</div></div></section>
+        <div><section className={workspace.panel}><div className={workspace.panelHead}><h2 className={workspace.panelTitle}>Pricing & stock</h2></div><div className={styles.fields}>{field("rentalPriceMinor", "Rental price (INR) *", "Amount in rupees, up to 2 decimal places", true)}<label className={styles.label}>Pricing unit<select {...register("rentalPriceUnit")} defaultValue={product?.rentalPriceUnit ?? "PER_DAY"} className={styles.input}><option value="PER_DAY">Per day</option><option value="PER_RENTAL">Per rental</option></select></label><div className={styles.wide}>{field("quantity", "Registered pieces *", "Number of physical pieces for this size. Each gets an individual record.", true)}</div></div></section>
           <section className={workspace.panel}><div className={workspace.panelHead}><h2 className={workspace.panelTitle}>Product images</h2></div><ProductImageManager images={images} productId={product?.id} disabled={isSubmitting || saved} error={errors.images?.message} onPendingChange={setUploading} onChange={(update) => { setValue("images", update(getValues("images")), { shouldValidate: true, shouldDirty: true }); }} /></section>
         </div>
       </fieldset>

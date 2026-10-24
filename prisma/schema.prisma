@@ -83,6 +83,22 @@ enum BoutiqueReviewAction {
   REOPENED
 }
 
+enum InventoryUnitStatus {
+  READY
+  WITH_CUSTOMER
+  INSPECTION_REQUIRED
+  CLEANING
+  REPAIR
+  LOST
+  RETIRED
+}
+
+enum InventoryUnitBlockType {
+  BOOKING
+  OFFLINE
+  MAINTENANCE
+}
+
 // ---------- AUTHENTICATION ----------
 
 model User {
@@ -121,6 +137,8 @@ model User {
   bookingQuotes       BookingQuote[]
   notifications       Notification[]
   supportRequests     SupportRequest[]
+  inventoryUnitEvents InventoryUnitEvent[] @relation("InventoryUnitEventActor")
+  inventoryUnitBlocks InventoryUnitBlock[] @relation("InventoryUnitBlockActor")
 
   @@index([role, isActive])
   @@index([createdAt])
@@ -291,6 +309,7 @@ model ProductVariant {
   product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
   bookingItems BookingItem[]
   basketItems BasketItem[]
+  inventoryUnits InventoryUnit[]
 
   @@unique([productId, size])
   @@index([productId, archived])
@@ -380,10 +399,70 @@ model BookingItem {
 
   booking Booking        @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  unitBlocks InventoryUnitBlock[]
 
   @@unique([bookingId, variantId])
   @@index([variantId, bookingId])
   @@index([bookingId])
+}
+
+// Each record represents one physical garment/accessory in the boutique.
+model InventoryUnit {
+  id        String              @id @default(cuid())
+  variantId String
+  code      String              @db.VarChar(100)
+  status    InventoryUnitStatus @default(READY)
+  version   Int                 @default(1)
+  createdAt DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime            @updatedAt @db.Timestamptz(6)
+
+  variant ProductVariant        @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  blocks  InventoryUnitBlock[]
+  events  InventoryUnitEvent[]
+
+  @@unique([variantId, code])
+  @@index([variantId, status, code])
+}
+
+// Booking blocks allocate a unit to one booking line. Offline and maintenance
+// blocks use the same schedule so every stock-affecting operation checks the
+// same physical piece and date range.
+model InventoryUnitBlock {
+  id            String                 @id @default(cuid())
+  unitId        String
+  bookingItemId String?
+  type          InventoryUnitBlockType
+  startsAt      DateTime               @db.Timestamptz(6)
+  endsAt        DateTime               @db.Timestamptz(6)
+  returnedAt    DateTime?              @db.Timestamptz(6)
+  releasedAt    DateTime?              @db.Timestamptz(6)
+  notes         String?                @db.VarChar(1000)
+  createdById   String?
+  createdAt     DateTime               @default(now()) @db.Timestamptz(6)
+
+  unit        InventoryUnit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  bookingItem BookingItem?  @relation(fields: [bookingItemId], references: [id], onDelete: SetNull)
+  createdBy   User?         @relation("InventoryUnitBlockActor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([unitId, releasedAt, startsAt, endsAt])
+  @@index([bookingItemId])
+}
+
+model InventoryUnitEvent {
+  id           String              @id @default(cuid())
+  unitId       String
+  actorId      String?
+  fromStatus   InventoryUnitStatus?
+  toStatus     InventoryUnitStatus
+  action       String              @db.VarChar(80)
+  notes        String?             @db.VarChar(1000)
+  createdAt    DateTime            @default(now()) @db.Timestamptz(6)
+
+  unit  InventoryUnit @relation(fields: [unitId], references: [id], onDelete: Restrict)
+  actor User?         @relation("InventoryUnitEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([unitId, createdAt])
+  @@index([actorId, createdAt])
 }
 
 model BookingEvent {

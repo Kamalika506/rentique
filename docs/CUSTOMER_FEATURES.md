@@ -84,7 +84,9 @@ An owner can submit RETURN with items containing itemId and quantity through the
 
 Partial returns retain PICKED_UP with partiallyReturned=true until every line is acknowledged. Full return is followed by inspection and completion. For new reservations, returned stock remains unavailable until the owner explicitly confirms cleaning with MARK_READY after the turnaround buffer. Known overdue collected stock blocks new future promises until resolved.
 
-Stock remains pooled per size in this increment. Return readiness is conservative for the entire booking; it does not implement the planning blueprint's individual physical-unit allocations, per-unit cleaning, walk-in import, or loss-case engine. Those are separate future migrations/features. Historical completed reservations retain their earlier stock-release behavior.
+Inventory is tracked per physical piece. The database migration creates individual piece records from each existing size quantity and maps live reservations onto non-overlapping pieces; if historical live bookings cannot fit the recorded quantity, the migration fails so stock can be reconciled before deployment. Online estimates and booking submission check piece-level availability, and each accepted line stores its allocated piece IDs. Pickup rechecks those allocations. Boutique staff can record an offline commitment, mark a returned piece for inspection, move it through cleaning or repair, and release it when ready. Customers see the currently ready piece count and a message while returned pieces are being processed.
+
+The offline workflow records commitments against a registered piece; it is not a guest walk-in booking form and does not save guest contact or payment details. Shops must register their actual stock and enter offline commitments for availability to be accurate. Apply `prisma/migrations/20261023110000_physical_inventory_units` with the normal database deployment workflow after reviewing the target database and reconciling any migration failure.
 
 ## Provider and scheduler setup
 

@@ -7,11 +7,9 @@ import { rentalDays } from "./rules";
 import { productInputSchema } from "../boutiques/inventory/schema";
 import { lifecycleCommandSchema } from "../boutiques/booking-management/lifecycle";
 import type { Prisma } from "@/generated/prisma/client";
-import { reservedUnits } from "./availability";
+import { availableInventoryForVariants, lockVariantUnits, syncVariantUnits } from "./inventory-units";
 import { resolveCategory } from "@/features/admin/categories";
 import { notifyBooking } from "@/features/notifications/server";
-import { validateReturnItems } from "./customer-contracts";
-import { peakReserved, reservationWindows } from "./stock";
 export { createReviewedBooking as createBooking } from "./customer-server";
 
 export async function catalog(request: Request) {
@@ -53,14 +51,15 @@ export async function catalog(request: Request) {
     const dates = z.object({ pickupAt: z.string().datetime({ offset: true }), returnAt: z.string().datetime({ offset: true }) }).parse({ pickupAt: params.get("pickupAt"), returnAt: params.get("returnAt") });
     const start = new Date(dates.pickupAt), end = new Date(dates.returnAt);
     try { rentalDays(start, end); } catch (error) { throw new ApiError(400, (error as Error).message); }
-    const products = await prisma.product.findMany({ where, orderBy, take: 2001, include: { ...productInclude, variants: { ...productInclude.variants, include: { bookingItems: { select: { quantity: true, booking: { select: { pickupAt: true, returnAt: true, status: true, requestExpiresAt: true, turnaroundMinutes: true, stockReadyAt: true } } } } } } } });
+    const products = await prisma.product.findMany({ where, orderBy, take: 2001, include: productInclude });
     if (products.length > 2000) throw new ApiError(400, "Narrow your search before filtering availability.");
     const size = params.get("size")?.toLowerCase();
+    const units = await availableInventoryForVariants(prisma, products.flatMap(product => product.variants.map(variant => variant.id)), start, new Date(end.getTime() + 86400000));
     const matching = products.flatMap(product => {
       const variants = product.variants.filter(variant => {
         const price = variant.rentalPriceMinor ?? product.rentalPriceMinor;
         return (!size || variant.size.toLowerCase() === size) && (minPrice === undefined || price >= minPrice) && (maxPrice === undefined || price <= maxPrice)
-          && variant.quantity > peakReserved(reservationWindows(variant.bookingItems), start, new Date(end.getTime() + 86400000));
+          && (units.get(variant.id)?.length ?? 0) > 0;
       });
       return variants.length ? [catalogProduct({ ...product, variants })] : [];
     });
@@ -88,6 +87,7 @@ export async function cancelCustomerBooking(request: Request) {
     const changed = await tx.booking.updateMany({ where: { id: input.id, customerId: user.id, version: input.version, status: { in: ["PENDING", "CONFIRMED"] } }, data: { status: "CANCELLED", cancellationReason: input.reason, version: { increment: 1 } } });
     if (!changed.count) throw new ApiError(409, "Booking unavailable or no longer cancellable. Refresh your rentals.");
     await tx.bookingEvent.create({ data: { bookingId: input.id, actorId: user.id, action: "CANCELLED", toStatus: "CANCELLED", details: { reason: input.reason } } });
+    await tx.inventoryUnitBlock.updateMany({ where: { bookingItem: { bookingId: input.id }, type: "BOOKING", releasedAt: null }, data: { releasedAt: new Date() } });
     const updated = await tx.booking.findUniqueOrThrow({ where: { id: input.id }, include: bookingInclude });
     await notifyBooking(tx, updated, "CANCELLED", "Reservation cancelled", input.reason);
     return bookingRecord(updated);
@@ -134,9 +134,9 @@ export async function updateBooking(request: Request) {
     if (command.action === "PICK_UP") {
       if (now < booking.pickupAt || now >= booking.returnAt) throw new ApiError(409, "Record collection during the agreed rental interval.");
       for (const item of [...booking.items].sort((a, b) => a.variantId.localeCompare(b.variantId))) {
-        await tx.$queryRawUnsafe('SELECT id FROM "ProductVariant" WHERE id = $1 FOR UPDATE', item.variantId);
-        const variant = await tx.productVariant.findUniqueOrThrow({ where: { id: item.variantId } });
-        if (item.quantity + await reservedUnits(tx, item.variantId, now, new Date(booking.returnAt.getTime() + booking.turnaroundMinutes * 60000), booking.id) > variant.quantity) throw new ApiError(409, "Stock is still with another customer or awaiting cleaning. Resolve this before collection.");
+        await lockVariantUnits(tx, item.variantId);
+        const allocations = item.unitBlocks.filter(block => block.type === "BOOKING" && !block.releasedAt);
+        if (allocations.length !== item.quantity || allocations.some(block => block.unit.status !== "READY")) throw new ApiError(409, "One or more assigned pieces are not ready for collection.");
       }
     }
     const transitions = { CONFIRM: "CONFIRMED", REJECT: "REJECTED", CANCEL: "CANCELLED", PICK_UP: "PICKED_UP", RETURN: "RETURNED", COMPLETE: "COMPLETED" } as const;
@@ -146,8 +146,21 @@ export async function updateBooking(request: Request) {
     if (command.action === "PICK_UP") data.pickedUpAt = now;
     if (command.action === "RETURN") {
       const returns = command.items ?? booking.items.filter(item => item.returnedQuantity < item.quantity).map(item => ({ itemId: item.id, quantity: item.quantity - item.returnedQuantity }));
-      try { validateReturnItems(booking.items, returns); } catch (error) { throw new ApiError(400, (error as Error).message); }
-      for (const item of returns) await tx.bookingItem.update({ where: { id: item.itemId }, data: { returnedQuantity: { increment: item.quantity } } });
+      const returnedUnitIds = new Set<string>();
+      for (const ret of returns) {
+        const item = booking.items.find(row => row.id === ret.itemId);
+        if (!item) throw new ApiError(400, "Return item does not match this reservation.");
+        const outstanding = item.unitBlocks.filter(block => !block.returnedAt && !block.releasedAt).sort((a, b) => a.unit.code.localeCompare(b.unit.code));
+        const selected = "unitIds" in ret ? ret.unitIds.map(id => outstanding.find(block => block.unitId === id)).filter((block): block is typeof outstanding[number] => Boolean(block)) : outstanding.slice(0, ret.quantity);
+        if (selected.length === 0 || selected.length !== ("unitIds" in ret ? ret.unitIds.length : ret.quantity) || item.returnedQuantity + selected.length > item.quantity || selected.some(block => returnedUnitIds.has(block.unitId))) throw new ApiError(409, "Selected pieces do not match outstanding pieces on this reservation.");
+        for (const block of selected) {
+          returnedUnitIds.add(block.unitId);
+          await tx.inventoryUnitBlock.update({ where: { id: block.id }, data: { returnedAt: now, endsAt: new Date(now.getTime() + 24 * 60 * 60000) } });
+          await tx.inventoryUnit.update({ where: { id: block.unitId }, data: { status: "INSPECTION_REQUIRED", version: { increment: 1 } } });
+          await tx.inventoryUnitEvent.create({ data: { unitId: block.unitId, actorId: user.id, fromStatus: block.unit.status, toStatus: "INSPECTION_REQUIRED", action: "RETURNED_FOR_INSPECTION" } });
+        }
+        await tx.bookingItem.update({ where: { id: ret.itemId }, data: { returnedQuantity: { increment: selected.length } } });
+      }
       const remaining = await tx.bookingItem.findMany({ where: { bookingId: booking.id }, select: { quantity: true, returnedQuantity: true } });
       if (remaining.every(item => item.returnedQuantity === item.quantity)) data.returnedAt = now;
       else data.status = "PICKED_UP";
@@ -155,10 +168,19 @@ export async function updateBooking(request: Request) {
     if (command.action === "MARK_READY") {
       if (!booking.returnedAt || now.getTime() < booking.returnedAt.getTime() + booking.turnaroundMinutes * 60000) throw new ApiError(409, "The 24-hour cleaning buffer has not finished.");
       data.stockReadyAt = now;
+      for (const item of booking.items) for (const block of item.unitBlocks.filter(block => block.returnedAt && !block.releasedAt)) {
+        const returnedAt = block.returnedAt;
+        if (!returnedAt || now < new Date(returnedAt.getTime() + booking.turnaroundMinutes * 60000)) throw new ApiError(409, "A piece has not completed its cleaning buffer.");
+        if (!["CLEANING", "INSPECTION_REQUIRED"].includes(block.unit.status)) throw new ApiError(409, "A damaged or missing piece must be resolved before releasing this reservation.");
+        await tx.inventoryUnit.update({ where: { id: block.unitId }, data: { status: "READY", version: { increment: 1 } } });
+        await tx.inventoryUnitBlock.update({ where: { id: block.id }, data: { releasedAt: now } });
+        await tx.inventoryUnitEvent.create({ data: { unitId: block.unitId, actorId: user.id, fromStatus: block.unit.status, toStatus: "READY", action: "CLEANING_COMPLETED" } });
+      }
     }
     if (command.action === "COMPLETE") data.completedAt = now;
     const changed = await tx.booking.updateMany({ where: { id: booking.id, boutiqueId: boutique.id, version: input.version }, data });
     if (!changed.count) throw new ApiError(409, "The booking changed. Reload it.");
+    if (["REJECT", "CANCEL"].includes(command.action)) await tx.inventoryUnitBlock.updateMany({ where: { bookingItem: { bookingId: booking.id }, type: "BOOKING", releasedAt: null }, data: { releasedAt: now } });
     if (command.action === "RECORD_INSPECTION") {
       const photos = command.photos ?? booking.inspection?.photos ?? [];
       const cloud = process.env.CLOUDINARY_CLOUD_NAME;
@@ -168,6 +190,11 @@ export async function updateBooking(request: Request) {
       })) throw new ApiError(400, "Use photos uploaded by this boutique.");
       const record = { condition: command.condition, photos, notes: command.notes, recordedById: user.id, recordedAt: now };
       await tx.bookingInspection.upsert({ where: { bookingId: booking.id }, create: { bookingId: booking.id, ...record }, update: record });
+      for (const item of booking.items) for (const block of item.unitBlocks.filter(block => block.returnedAt && !block.releasedAt)) {
+        const status = command.condition === "GOOD" ? "CLEANING" : "REPAIR";
+        await tx.inventoryUnit.update({ where: { id: block.unitId }, data: { status, version: { increment: 1 } } });
+        await tx.inventoryUnitEvent.create({ data: { unitId: block.unitId, actorId: user.id, fromStatus: block.unit.status, toStatus: status, action: "INSPECTION_RECORDED", notes: command.notes } });
+      }
     }
     if (command.action === "RECORD_REFUND") {
       const record = { status: command.status, notes: command.notes, recordedById: user.id, recordedAt: now };
@@ -188,14 +215,18 @@ export async function boutiqueProducts(request: Request) {
   return id ? managementProduct(products[0]) : products.map(managementProduct);
 }
 export async function saveProduct(request: Request) {
-  const { boutique } = await ownedBoutique();
+  const { user, boutique } = await ownedBoutique();
   const body = z.object({ input: productInputSchema, id: z.string().optional(), version: z.number().int().positive().optional() }).parse(await request.json());
   const input = body.input;
   const category = await resolveCategory(input.category);
   if (input.images.some(image => image.source !== "cloudinary" || !image.publicId.startsWith(`rentique/${boutique.id}/`) || !image.secureUrl.startsWith(`https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload/`))) throw new ApiError(400, "Use images uploaded by your boutique.");
   const images = input.images.map((image, position) => { if (image.source !== "cloudinary") throw new ApiError(400, "Invalid image."); return { publicId: image.publicId, secureUrl: image.secureUrl, alt: image.alt, position }; });
   const fields = { name: input.name, description: input.description, category: category.legacyKey ?? "OTHER" as const, categoryId: category.id, rentalPriceUnit: input.rentalPriceUnit ?? "PER_DAY" as const, occasionTags: input.occasionTags, colours: input.colours, fabricStyle: input.fabricStyle, garmentType: input.garmentType, includedPieces: input.includedPieces, rentalPriceMinor: BigInt(input.rentalPriceMinor), depositMinor: BigInt(0) };
-  if (request.method === "POST") return managementProduct(await prisma.product.create({ data: { ...fields, boutiqueId: boutique.id, variants: { create: { size: input.size, quantity: input.quantity, measurements: input.measurements } }, images: { create: images } }, include: productInclude }));
+  if (request.method === "POST") return prisma.$transaction(async tx => {
+    const product = await tx.product.create({ data: { ...fields, boutiqueId: boutique.id, variants: { create: { size: input.size, quantity: input.quantity, measurements: input.measurements } }, images: { create: images } }, include: productInclude });
+    await syncVariantUnits(tx, { variantId: product.variants[0].id, size: input.size, quantity: input.quantity, actorId: user.id });
+    return managementProduct(await tx.product.findUniqueOrThrow({ where: { id: product.id }, include: productInclude }));
+  });
   const { id, version } = z.object({ id: z.string(), version: z.number().int().positive() }).parse(body);
   return prisma.$transaction(async tx => {
     const product = await tx.product.findFirst({ where: { id, boutiqueId: boutique.id }, include: productInclude });
@@ -203,11 +234,12 @@ export async function saveProduct(request: Request) {
     const variant = product.variants[0];
     if (product.variants.length > 1) throw new ApiError(409, "This editor supports one size per listing. Multi-size products need a variant editor.");
     if (variant && variant.size !== input.size && await tx.bookingItem.count({ where: { variantId: variant.id } })) throw new ApiError(409, "A booked size cannot be renamed. Create a new listing for another size.");
-    if (variant && input.quantity < await reservedUnits(tx, variant.id, new Date(), new Date(8640000000000000))) throw new ApiError(409, "This stock is committed to rentals. Resolve those bookings before reducing quantity.");
     const changed = await tx.product.updateMany({ where: { id, boutiqueId: boutique.id, version }, data: { ...fields, version: { increment: 1 } } });
     if (!changed.count) throw new ApiError(409, "Product changed. Reload before saving.");
-    if (variant) await tx.productVariant.update({ where: { id: variant.id }, data: { size: input.size, quantity: input.quantity, measurements: input.measurements, version: { increment: 1 } } });
-    else await tx.productVariant.create({ data: { productId: id, size: input.size, quantity: input.quantity, measurements: input.measurements } });
+    const savedVariant = variant
+      ? await tx.productVariant.update({ where: { id: variant.id }, data: { size: input.size, quantity: input.quantity, measurements: input.measurements, version: { increment: 1 } } })
+      : await tx.productVariant.create({ data: { productId: id, size: input.size, quantity: input.quantity, measurements: input.measurements } });
+    await syncVariantUnits(tx, { variantId: savedVariant.id, size: input.size, quantity: input.quantity, actorId: user.id });
     await tx.productImage.deleteMany({ where: { productId: id } });
     await tx.productImage.createMany({ data: images.map(image => ({ ...image, productId: id })) });
     return managementProduct(await tx.product.findUniqueOrThrow({ where: { id }, include: productInclude }));

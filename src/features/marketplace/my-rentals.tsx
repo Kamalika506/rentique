@@ -33,6 +33,7 @@ export default function MyRentals() {
         <div className="flex flex-wrap justify-between gap-4"><h2 className="font-serif text-2xl text-[#4c2544]">{booking.boutique.name}</h2><span className="rounded-full bg-[#f3efe9] px-4 py-2 text-sm">{booking.partiallyReturned ? "Partially returned" : bookingStatusLabels[booking.status]}</span></div>
         <p className="mt-3 break-all text-xs">Reservation {booking.id}</p>
         {booking.status === "PENDING" && <p className="mt-4 rounded-xl bg-amber-50 p-4 text-sm">Awaiting boutique confirmation. Please wait for confirmation before travelling.{booking.requestExpiresAt && " Decision deadline: " + bookingDate(booking.requestExpiresAt, "Asia/Kolkata")}</p>}
+        {(booking.status === "RETURNED" || booking.status === "COMPLETED" && !booking.stockReadyAt) && <p className="mt-4 rounded-xl bg-amber-50 p-4 text-sm">The returned pieces are being inspected and cleaned. The boutique will mark them ready after this step.</p>}
         <ul className="mt-5 space-y-3">{booking.products.map(product => <li key={product.itemId ?? product.id}>{product.image && <>
 {/* eslint-disable-next-line @next/next/no-img-element */}
 <img src={product.image} alt={product.name} width={80} height={100} className="mb-2 h-24 w-20 rounded object-cover" /></>}<Link href={"/marketplace/" + product.id} className="font-medium underline">{product.name}</Link> · {product.size} × {product.quantity}<p className="mt-1 text-sm">Returned to shop: {product.returnedQuantity ?? 0} of {product.quantity}</p></li>)}</ul>

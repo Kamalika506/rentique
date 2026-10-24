@@ -33,6 +33,7 @@ export async function runNotificationJobs() {
   for (const booking of due) await prisma.$transaction(async tx => {
     const result = await tx.booking.updateMany({ where: { id: booking.id, status: "PENDING", OR: [{ requestExpiresAt: { lte: new Date() } }, { requestExpiresAt: null, pickupAt: { lte: new Date() } }], version: booking.version }, data: { status: "EXPIRED", version: { increment: 1 } } });
     if (!result.count) return;
+    await tx.inventoryUnitBlock.updateMany({ where: { bookingItem: { bookingId: booking.id }, type: "BOOKING", releasedAt: null }, data: { releasedAt: new Date() } });
     await tx.bookingEvent.create({ data: { bookingId: booking.id, action: "EXPIRED", fromStatus: "PENDING", toStatus: "EXPIRED" } });
     await notifyBooking(tx, { ...booking, version: booking.version + 1 }, "EXPIRED", "Reservation request expired", "The boutique did not confirm before the deadline. The stock hold has been released.");
     expired++;

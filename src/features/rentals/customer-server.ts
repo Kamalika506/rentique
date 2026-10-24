@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ApiError, currentUser } from "@/lib/api";
 import type { Prisma } from "@/generated/prisma/client";
-import { publicProductWhere, reservedUnits } from "./availability";
+import { availablePhysicalUnits, publicProductWhere } from "./availability";
+import { allocateBookingUnits, lockVariantUnits } from "./inventory-units";
 import { selectionSchema, reviewedQuoteSchema, validContactPhone } from "./customer-contracts";
 import { rateAllowed } from "@/lib/rate-limit";
 import { rentalDays, lineAmounts } from "./rules";
@@ -27,7 +28,7 @@ async function quoteSelection(tx: Prisma.TransactionClient, userId: string, raw:
   const lines = [];
   for (const selected of input.items) {
     const variant = variants.find(variant => variant.id === selected.variantId)!;
-    const availableUnits = Math.max(0, variant.quantity - await reservedUnits(tx, variant.id, pickupAt, new Date(returnAt.getTime() + 86400000)));
+    const availableUnits = (await availablePhysicalUnits(tx, variant.id, pickupAt, new Date(returnAt.getTime() + 86400000))).length;
     if (selected.quantity > availableUnits) throw new ApiError(409, variant.product.name + " is unavailable in this quantity for your dates.");
     const amounts = lineAmounts(variant.rentalPriceMinor ?? variant.product.rentalPriceMinor, BigInt(0), variant.product.rentalPriceUnit, days, selected.quantity);
     lines.push({ variantId: variant.id, productId: variant.productId, name: variant.product.name, size: variant.size,
@@ -75,7 +76,9 @@ export async function createReviewedBooking(request: Request) {
     const record = await tx.bookingQuote.findFirst({ where: { id: input.quoteId, userId: user.id, expiresAt: { gt: new Date() } } });
     if (!record) throw new ApiError(409, "Your estimate expired. Review a new estimate before requesting.");
     const reviewed = reviewedQuoteSchema.parse(record.payload);
-    for (const id of reviewed.items.map(item => item.variantId).sort()) await tx.$queryRawUnsafe('SELECT id FROM "ProductVariant" WHERE id = $1 FOR UPDATE', id);
+    for (const id of reviewed.items.map(item => item.variantId).sort()) {
+      await lockVariantUnits(tx, id);
+    }
     const count = await tx.booking.count({ where: { customerId: user.id, status: "PENDING", OR: [{ requestExpiresAt: null, pickupAt: { gt: new Date() } }, { requestExpiresAt: { gt: new Date() } }] } });
     if (count >= 3) throw new ApiError(409, "You already have three pending requests. Wait for a decision or cancel one.");
     const current = await quoteSelection(tx, user.id, { items: reviewed.items, pickupAt: reviewed.pickupAt, returnAt: reviewed.returnAt });
@@ -88,6 +91,15 @@ export async function createReviewedBooking(request: Request) {
       items: { create: current.lines.map(line => ({ variantId: line.variantId, quantity: line.quantity, productNameSnap: line.name, sizeSnapshot: line.size, categorySnapshot: line.category, rentalMinor: BigInt(line.rentalMinor), depositMinor: BigInt(0) })) },
       events: { create: { actorId: user.id, action: "CREATED", toStatus: "PENDING" } },
     }, include: bookingInclude });
+    for (const item of booking.items) {
+      await allocateBookingUnits(tx, {
+        bookingItemId: item.id,
+        variantId: item.variantId,
+        quantity: item.quantity,
+        startsAt: booking.pickupAt,
+        endsAt: new Date(booking.returnAt.getTime() + booking.turnaroundMinutes * 60000),
+      });
+    }
     await tx.basketItem.deleteMany({ where: { userId: user.id, variantId: { in: reviewed.items.map(item => item.variantId) } } });
     await notifyBooking(tx, booking, "REQUESTED", "Reservation requested", "Your request awaits boutique confirmation. It expires in 12 hours.");
     return bookingRecord(booking);
