@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import { SignOutButton } from "./sign-out-button";
 import {
   Heart,
+  CircleHelp,
   Menu,
   UserRound,
   X,
@@ -49,8 +50,9 @@ export default function CustomerHeader() {
             <Link
               key={link.label}
               href={link.href}
-              className="whitespace-nowrap text-sm text-[#514a50] transition-colors hover:text-[#4c2544]"
+              className={link.href === "/support" ? "inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-[#4c2544] px-4 py-2 text-sm font-medium text-[#4c2544] transition hover:bg-[#f3efe9]" : "whitespace-nowrap text-sm text-[#514a50] transition-colors hover:text-[#4c2544]"}
             >
+              {link.href === "/support" && <CircleHelp size={16} aria-hidden="true" />}
               {link.label}
             </Link>
           ))}
@@ -80,6 +82,14 @@ export default function CustomerHeader() {
         </div>
 
         {user && <Link href="/profile" className="ml-auto max-w-28 truncate text-sm font-medium text-[#4c2544] sm:hidden">{username}</Link>}
+        {showCustomerLinks && <Link
+          href="/support"
+          aria-label="Help and complaints"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[#4c2544] px-3 py-2 text-sm font-medium text-[#4c2544] transition hover:bg-[#f3efe9] xl:hidden"
+        >
+          <CircleHelp size={16} aria-hidden="true" />
+          Help
+        </Link>}
         <button
           type="button"
           onClick={() => setMenuOpen((open) => !open)}
