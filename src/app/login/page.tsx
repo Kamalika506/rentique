@@ -1,13 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { getProviders, signIn } from "next-auth/react";
+import { Suspense, useState } from "react";
+import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, LockKeyhole } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
+import GoogleSignInButton from "@/components/google-sign-in-button";
 
 export default function LoginPage() {
   return <Suspense fallback={<main className="p-8" role="status">Loading sign in...</main>}><LoginForm /></Suspense>;
@@ -25,8 +26,6 @@ function LoginForm() {
   const [error, setError] = useState("");
 
   const [busy, setBusy] = useState(false);
-  const [googleEnabled, setGoogleEnabled] = useState(false);
-  useEffect(() => { getProviders().then(providers => setGoogleEnabled(Boolean(providers?.google))).catch(() => {}); }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -156,7 +155,7 @@ function LoginForm() {
             </button>
           </form>
           <div className="mt-5 flex flex-wrap justify-center gap-4 text-sm"><Link href="/forgot-password" className="underline">Forgot password?</Link><Link href="/verify-email" className="underline">Verify email</Link></div>
-          {googleEnabled && <button onClick={() => void signIn("google", { callbackUrl: boutiqueIntent ? "/auth/continue?intent=boutique" : "/auth/continue" })} className="mt-5 w-full rounded-full border border-[#d7cec5] p-3 text-sm">Continue with Google</button>}
+          <GoogleSignInButton boutiqueIntent={boutiqueIntent} />
 
           {!adminIntent && <p className="mt-7 text-center text-sm text-[#716971]">
             New to Rentique?{" "}

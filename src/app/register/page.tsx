@@ -8,6 +8,7 @@ import Link from "next/link";
 import { ArrowRight, Eye, EyeOff, UserRound } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
+import GoogleSignInButton from "@/components/google-sign-in-button";
 
 export default function RegisterPage() {
   return <Suspense fallback={<main className="p-8" role="status">Loading registration...</main>}><RegisterForm /></Suspense>;
@@ -230,6 +231,8 @@ function RegisterForm() {
               {busy ? "Creating account?" : "Create account"} <ArrowRight size={17} />
             </button>
           </form>
+
+          <GoogleSignInButton boutiqueIntent={boutiqueIntent} />
 
           <p className="mt-7 text-center text-sm text-[#716971]">
             Already have an account?{" "}
