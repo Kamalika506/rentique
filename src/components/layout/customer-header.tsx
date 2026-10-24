@@ -16,8 +16,6 @@ const navLinks = [
   { label: "Boutiques", href: "/boutiques" },
   { label: "Occasion styling", href: "/styling" },
   { label: "My rentals", href: "/my-rentals" },
-  { label: "Basket", href: "/basket" },
-  { label: "Updates", href: "/notifications" },
   { label: "Help", href: "/support" },
 ];
 
@@ -30,7 +28,7 @@ export default function CustomerHeader() {
   const isAdmin = user?.role === "ADMIN";
   const homeHref = isBoutiqueOwner ? "/boutique-home" : isAdmin ? "/admin-home" : "/";
   const showCustomerLinks = status !== "loading" && (!user || user.role === "CUSTOMER");
-  const links = isBoutiqueOwner ? [{ label: "Workspace", href: "/boutique/dashboard" }, ...navLinks.filter(link => link.href !== "/boutiques" && link.href !== "/my-rentals")] : isAdmin ? [{ label: "Admin workspace", href: "/admin" }, { label: "Updates", href: "/notifications" }] : showCustomerLinks ? navLinks : [];
+  const links = isBoutiqueOwner ? [{ label: "Workspace", href: "/boutique/dashboard" }, ...navLinks.filter(link => link.href !== "/boutiques" && link.href !== "/my-rentals")] : isAdmin ? [{ label: "Admin workspace", href: "/admin" }] : showCustomerLinks ? navLinks : [];
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#e4dfd7] bg-[#fffdf9]/95 backdrop-blur">

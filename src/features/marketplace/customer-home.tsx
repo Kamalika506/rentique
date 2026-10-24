@@ -6,31 +6,6 @@ import { ArrowRight, Heart, Leaf, ShieldCheck, Sparkles } from "lucide-react";
 import CustomerHeader from "@/components/layout/customer-header";
 import CustomerFooter from "@/components/layout/customer-footer";
 
-const categories = [
-  {
-    name: "Wedding guest",
-    occasion: "wedding",
-    description: "Celebrate in style",
-    image:
-      "https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=800&q=85",
-  },
-  {
-    name: "Evening wear",
-    occasion: "party",
-    description: "Make an entrance",
-    image:
-      "https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=800&q=85",
-  },
-  {
-    name: "Everyday chic",
-    occasion: "casual",
-    description: "Effortlessly put together",
-    image:
-      "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=800&q=85",
-  },
-];
-
-
 export default function Home() {
   const { toggleWishlist, isWishlisted, isLoaded } = useWishlist();
   const { products: catalog, loading, error } = useCatalog();
@@ -148,62 +123,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20">
-          <div className="mb-8 flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.18em] text-[#927c59]">
-                Find your occasion
-              </p>
-              <h2 className="mt-3 font-serif text-3xl tracking-tight text-[#4c2544] sm:text-4xl">
-                Dress for the feeling
-              </h2>
-            </div>
-            <Link
-              href="/marketplace"
-              className="hidden items-center gap-2 pb-1 text-sm font-medium text-[#4c2544] hover:text-[#927c59] sm:flex"
-            >
-              Browse all <ArrowRight size={16} />
-            </Link>
-          </div>
 
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {categories.map((category, index) => (
-              <Link
-                key={category.name}
-                href={`/marketplace?occasion=${category.occasion}`}
-                className="group relative overflow-hidden rounded-2xl bg-[#e5d9dc]"
-              >
-                <div
-                  role="img"
-                  aria-label={`${category.name} fashion`}
-                  className="aspect-[4/5] bg-cover bg-center transition duration-500 group-hover:scale-105"
-                  style={{
-                    backgroundImage: `url('${category.image}')`,
-                  }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/5 to-transparent" />
-                <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
-                  <p className="text-xs uppercase tracking-[0.15em] text-white/80">
-                    {category.description}
-                  </p>
-                  <div className="mt-2 flex items-center justify-between gap-3">
-                    <h3 className="font-serif text-2xl sm:text-3xl">
-                      {category.name}
-                    </h3>
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-white/60 transition group-hover:bg-white group-hover:text-[#4c2544]">
-                      <ArrowRight size={17} />
-                    </span>
-                  </div>
-                </div>
-                {index === 0 && (
-                  <span className="absolute left-4 top-4 rounded-full bg-[#fffdf9] px-3 py-1.5 text-xs font-medium text-[#4c2544]">
-                    Made for celebrations
-                  </span>
-                )}
-              </Link>
-            ))}
-          </div>
-        </section>
 
         <section className="bg-[#eee7e5]">
           <div className="mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20">
