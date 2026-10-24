@@ -103,7 +103,7 @@ export async function boutiqueBookings(request: Request) {
     return bookingRecord(booking);
   }
   const now = new Date(), until = new Date(now.getTime() + 7 * 86400000);
-  const page = z.coerce.number().int().min(1).max(100000).parse(params.get("page") ?? 1), pageSize = 20;
+  const page = z.coerce.number().int().min(1).max(100000).parse(params.get("page") ?? 1), pageSize = 3;
   const search = z.string().max(200).parse(params.get("search") ?? "").trim();
   const status = z.enum(["PENDING", "CONFIRMED", "PICKED_UP", "RETURNED", "COMPLETED", "CANCELLED", "REJECTED", "EXPIRED"]).optional().parse(params.get("status") || undefined);
   const activeRequest: Prisma.BookingWhereInput = { status: "PENDING", OR: [{ requestExpiresAt: { gt: now } }, { requestExpiresAt: null, pickupAt: { gt: now } }] };

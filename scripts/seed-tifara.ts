@@ -12,6 +12,8 @@
  */
 
 import { createHash } from "node:crypto";
+import { tifaraProductImages } from "./data/tifara-product-images";
+import { tifaraShopDetails } from "./data/tifara-shop-details";
 import dotenv from "dotenv";
 
 dotenv.config({ path: [".env.local", ".env"], quiet: true });
@@ -122,16 +124,7 @@ const TIFARA_PRODUCTS: SeedProduct[] = [
     rentalPriceUnit: "PER_RENTAL",
     size: "M",
     quantity: 1,
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Crimson raw silk bridal lehenga full drape",
-      },
-      {
-        url: "https://plus.unsplash.com/premium_photo-1682096060450-6ac06a3a0478?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Handcrafted zardozi detail on crimson lehenga",
-      },
-    ],
+    images: [tifaraProductImages[0]],
   },
   {
     slug: "tifara-kanjivaram-tissue-saree",
@@ -148,16 +141,7 @@ const TIFARA_PRODUCTS: SeedProduct[] = [
     rentalPriceUnit: "PER_DAY",
     size: "Free size",
     quantity: 2,
-    images: [
-      {
-        url: "https://plus.unsplash.com/premium_photo-1682092632793-c7d75b23718e?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Gold Kanjivaram tissue saree with temple border",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1733937140732-2cc70a1d7017?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Close-up of intricate gold zari pallu weave",
-      },
-    ],
+    images: [tifaraProductImages[1]],
   },
   {
     slug: "tifara-champagne-couture-gown",
@@ -174,16 +158,7 @@ const TIFARA_PRODUCTS: SeedProduct[] = [
     rentalPriceUnit: "PER_RENTAL",
     size: "S",
     quantity: 1,
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1596783074918-c84cb06531ca?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Champagne shimmer flared couture gown",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Corset and beading detail on champagne evening gown",
-      },
-    ],
+    images: [tifaraProductImages[2]],
   },
   {
     slug: "tifara-sage-green-anarkali",
@@ -200,16 +175,7 @@ const TIFARA_PRODUCTS: SeedProduct[] = [
     rentalPriceUnit: "PER_DAY",
     size: "L",
     quantity: 2,
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1622495966027-e0173192c728?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Sage green georgette flared Anarkali suit",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1614251055880-ee96e4803393?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Gota patti neckline and hem detail",
-      },
-    ],
+    images: [tifaraProductImages[3]],
   },
   {
     slug: "tifara-emerald-polki-choker",
@@ -226,16 +192,7 @@ const TIFARA_PRODUCTS: SeedProduct[] = [
     rentalPriceUnit: "PER_DAY",
     size: "Free size",
     quantity: 2,
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1535556116002-6281ff3e9f36?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Polki and emerald bridal choker necklace set",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1506630448388-4e683c67ddb0?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Choker set earring and craftsmanship detail",
-      },
-    ],
+    images: [tifaraProductImages[4]],
   },
   {
     slug: "tifara-midnight-blue-sherwani",
@@ -252,16 +209,7 @@ const TIFARA_PRODUCTS: SeedProduct[] = [
     rentalPriceUnit: "PER_RENTAL",
     size: "42",
     quantity: 2,
-    images: [
-      {
-        url: "https://images.unsplash.com/photo-1632149877166-f75d49000351?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Midnight blue structured designer Indowestern set",
-      },
-      {
-        url: "https://images.unsplash.com/photo-1591047139829-d91aecb6caea?w=800&h=1000&fit=crop&auto=format&q=85",
-        alt: "Collar embroidery and velvet texture detail",
-      },
-    ],
+    images: [tifaraProductImages[5]],
   },
 ];
 
@@ -311,7 +259,7 @@ async function seedProduct(boutiqueId: string, product: SeedProduct): Promise<"c
 
   for (let i = 0; i < product.images.length; i++) {
     const { url, alt } = product.images[i];
-    const publicId = `rentique/tifara/${product.slug}-${i + 1}`;
+    const publicId = `rentique/tifara/catalog-v2/${product.slug}-${i + 1}`;
 
     process.stdout.write(`   Img ${i + 1}: downloading…\n`);
     let imageBuffer: Buffer;
@@ -374,6 +322,12 @@ async function main() {
   }
 
   let created = 0, skipped = 0, failed = 0;
+
+  // Fill blank demonstration fields without overwriting details edited by the owner.
+  const missingDetails = Object.fromEntries(Object.entries(tifaraShopDetails).filter(([field]) => !String(boutique[field as keyof typeof tifaraShopDetails] ?? "").trim()));
+  if (Object.keys(missingDetails).length) {
+    await db.boutique.update({ where: { id: boutique.id }, data: { ...missingDetails, version: { increment: 1 } } });
+  }
 
   for (const product of TIFARA_PRODUCTS) {
     try {
