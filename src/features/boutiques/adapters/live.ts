@@ -11,7 +11,7 @@ const message = (error: unknown) => error instanceof Error ? error.message : "Se
 export function createLiveBookingService(): BoutiqueBookingService {
   const service: BoutiqueBookingService = {
     mode: "live", boutique: { id: "", name: "Boutique workspace" }, referenceDate: new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }), timezone: "Asia/Kolkata",
-    listBookings: query => bookingApi(`/api/boutique/bookings?${new URLSearchParams(Object.entries(query).filter(([, value]) => Boolean(value)) as [string, string][])}`),
+    listBookings: query => bookingApi(`/api/boutique/bookings?${new URLSearchParams(Object.entries(query).filter(([, value]) => Boolean(value)).map(([key, value]) => [key, String(value)]))}`),
     async getBooking(id) { const result = await bookingApi<Awaited<ReturnType<BoutiqueBookingService["getBooking"]>>>(`/api/boutique/bookings?id=${encodeURIComponent(id)}`); service.boutique.id = result.boutiqueId; return result; },
     decideBooking: (id, decision, version, reason) => service.applyLifecycleAction(id, decision === "CONFIRM" ? { action: "CONFIRM" } : { action: "REJECT", reason: reason ?? "" }, version),
     applyLifecycleAction: (id, command, version) => bookingApi("/api/boutique/bookings", jsonRequest("PATCH", { id, command, version })),

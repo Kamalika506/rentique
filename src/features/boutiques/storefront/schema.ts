@@ -4,6 +4,9 @@ import { boutiqueRegistrationSchema } from "../onboarding/schema";
 
 export const boutiqueSettingsSchema = boutiqueRegistrationSchema.omit({ categories: true }).extend({
   openingHours: z.string().trim().max(1000).optional(),
+  collectionInstructions: z.string().trim().max(2000).optional(),
+  cancellationPolicy: z.string().trim().max(2000).optional(),
+  returnPolicy: z.string().trim().max(2000).optional(),
   rentalPolicy: z.string().trim().max(3000).optional(),
   version: z.number().int().positive(),
   timezone: z.string().trim().max(64).refine((value) => {
@@ -23,7 +26,7 @@ export type BoutiqueSettings = BoutiqueSettingsInput & { id: string; status: "PE
 export interface PublicBoutique {
   id: string; name: string; description: string; contactEmail: string; phone: string;
   address: string; city: string; state: string; postalCode: string; categories: string[];
-  socialLink: string | null; timezone: string; productCount: number; openingHours?: string; rentalPolicy?: string;
+  socialLink: string | null; timezone: string; productCount: number; openingHours?: string; rentalPolicy?: string; collectionInstructions?: string; cancellationPolicy?: string; returnPolicy?: string;
 }
 
 // Explicit projection keeps owner accounts and application-review details private.
@@ -31,11 +34,11 @@ export const publicBoutiqueSelect = {
   id: true, name: true, description: true, contactEmail: true, phone: true, address: true,
   city: true, state: true, postalCode: true, categories: true, socialLink: true, timezone: true,
   _count: { select: { products: { where: { archived: false, OR: [{ categoryId: null }, { catalogCategory: { isActive: true } }] } } } },
-  openingHours: true, rentalPolicy: true,
+  openingHours: true, rentalPolicy: true, collectionInstructions: true, cancellationPolicy: true, returnPolicy: true,
 } satisfies Prisma.BoutiqueSelect;
 export const boutiqueSettingsSelect = {
   id: true, name: true, description: true, contactEmail: true, phone: true, address: true,
   city: true, state: true, postalCode: true, socialLink: true, timezone: true, version: true,
   status: true, updatedAt: true,
-  openingHours: true, rentalPolicy: true,
+  openingHours: true, rentalPolicy: true, collectionInstructions: true, cancellationPolicy: true, returnPolicy: true,
 } satisfies Prisma.BoutiqueSelect;

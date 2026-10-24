@@ -1,3 +1,5 @@
+import { requestExpired } from "./expiry";
+
 export interface StockReservation {
   quantity: number;
   booking: {
@@ -11,7 +13,7 @@ export function reservationWindows(items: StockReservation[], now = new Date()):
   return items.flatMap(item => {
     const b = item.booking;
     if (["CANCELLED", "REJECTED", "EXPIRED"].includes(b.status ?? "")) return [];
-    if (b.status === "PENDING" && b.requestExpiresAt && b.requestExpiresAt <= now) return [];
+    if (requestExpired(b, now)) return [];
     if (b.stockReadyAt) return [];
     const cleaning = b.turnaroundMinutes ?? 0;
     if (b.status === "COMPLETED" && cleaning === 0) return [];

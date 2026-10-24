@@ -19,7 +19,7 @@ async function quoteSelection(tx: Prisma.TransactionClient, userId: string, raw:
   let days: number;
   try { days = rentalDays(pickupAt, returnAt); } catch (error) { throw new ApiError(400, (error as Error).message); }
   if (pickupAt.getTime() < Date.now() + 24 * 3600000 || returnAt.getTime() - pickupAt.getTime() > 14 * 86400000 || pickupAt.getTime() > Date.now() + 180 * 86400000) throw new ApiError(400, "Choose pickup at least 24 hours ahead, within 180 days, and a rental of up to 14 days.");
-  const variants = await tx.productVariant.findMany({ where: { id: { in: input.items.map(item => item.variantId) }, archived: false, product: publicProductWhere }, include: { product: { include: { boutique: true } } } });
+  const variants = await tx.productVariant.findMany({ where: { id: { in: input.items.map(item => item.variantId) }, archived: false, product: publicProductWhere }, include: { product: { include: { boutique: true, images: { orderBy: { position: "asc" }, take: 1 } } } } });
   if (variants.length !== input.items.length) throw new ApiError(409, "A selected item or size is no longer available.");
   const shop = variants[0].product.boutique;
   if (variants.some(variant => variant.product.boutiqueId !== shop.id)) throw new ApiError(400, "All items must belong to one boutique.");
@@ -31,15 +31,15 @@ async function quoteSelection(tx: Prisma.TransactionClient, userId: string, raw:
     if (selected.quantity > availableUnits) throw new ApiError(409, variant.product.name + " is unavailable in this quantity for your dates.");
     const amounts = lineAmounts(variant.rentalPriceMinor ?? variant.product.rentalPriceMinor, BigInt(0), variant.product.rentalPriceUnit, days, selected.quantity);
     lines.push({ variantId: variant.id, productId: variant.productId, name: variant.product.name, size: variant.size,
-      measurements: variant.measurements, includedPieces: variant.product.includedPieces, category: variant.product.category,
+      image: variant.product.images[0]?.secureUrl ?? "", measurements: variant.measurements, includedPieces: variant.product.includedPieces, category: variant.product.category,
       quantity: selected.quantity, rentalMinor: Number(amounts.rentalMinor), productVersion: variant.product.version, variantVersion: variant.version });
   }
   const rentalMinor = lines.reduce((sum, line) => sum + line.rentalMinor, 0);
   if (!Number.isSafeInteger(rentalMinor)) throw new ApiError(400, "Rental estimate is too large.");
-  const policy = terms + (shop.rentalPolicy ? "\nShop policy: " + shop.rentalPolicy : "");
-  const fingerprint = createHash("sha256").update(JSON.stringify({ lines: [...lines].sort((a, b) => a.variantId.localeCompare(b.variantId)), policy, hours: shop.openingHours, pickupAt: input.pickupAt, returnAt: input.returnAt })).digest("hex");
-  return { payload: { ...input, boutiqueId: shop.id, rentalMinor, fingerprint, policy, openingHours: shop.openingHours },
-    lines, boutique: { id: shop.id, name: shop.name, address: shop.address, city: shop.city }, rentalDays: days, currency: "INR" };
+  const policy = terms + [["Shop policy", shop.rentalPolicy], ["Collection instructions", shop.collectionInstructions], ["Cancellation policy", shop.cancellationPolicy], ["Return policy", shop.returnPolicy]].filter(([, value]) => value).map(([label, value]) => "\n" + label + ": " + value).join("");
+  const fingerprint = createHash("sha256").update(JSON.stringify({ lines: [...lines].sort((a, b) => a.variantId.localeCompare(b.variantId)), policy, shopContact: [shop.name, shop.address, shop.city, shop.phone, shop.contactEmail], hours: shop.openingHours, pickupAt: input.pickupAt, returnAt: input.returnAt })).digest("hex");
+  return { payload: { ...input, boutiqueId: shop.id, rentalMinor, fingerprint, policy, openingHours: shop.openingHours, collectionInstructions: shop.collectionInstructions, cancellationPolicy: shop.cancellationPolicy, returnPolicy: shop.returnPolicy },
+    lines, boutique: { id: shop.id, name: shop.name, address: shop.address, city: shop.city, phone: shop.phone, contactEmail: shop.contactEmail }, rentalDays: days, currency: "INR" };
 }
 
 export async function createQuote(request: Request) {
@@ -76,7 +76,7 @@ export async function createReviewedBooking(request: Request) {
     if (!record) throw new ApiError(409, "Your estimate expired. Review a new estimate before requesting.");
     const reviewed = reviewedQuoteSchema.parse(record.payload);
     for (const id of reviewed.items.map(item => item.variantId).sort()) await tx.$queryRawUnsafe('SELECT id FROM "ProductVariant" WHERE id = $1 FOR UPDATE', id);
-    const count = await tx.booking.count({ where: { customerId: user.id, status: "PENDING", OR: [{ requestExpiresAt: null }, { requestExpiresAt: { gt: new Date() } }] } });
+    const count = await tx.booking.count({ where: { customerId: user.id, status: "PENDING", OR: [{ requestExpiresAt: null, pickupAt: { gt: new Date() } }, { requestExpiresAt: { gt: new Date() } }] } });
     if (count >= 3) throw new ApiError(409, "You already have three pending requests. Wait for a decision or cancel one.");
     const current = await quoteSelection(tx, user.id, { items: reviewed.items, pickupAt: reviewed.pickupAt, returnAt: reviewed.returnAt });
     if (current.payload.fingerprint !== reviewed.fingerprint) throw new ApiError(409, "Prices, item details, or shop terms changed. Review a new estimate.");
@@ -84,7 +84,7 @@ export async function createReviewedBooking(request: Request) {
       customerId: user.id, boutiqueId: reviewed.boutiqueId, pickupAt: new Date(reviewed.pickupAt), returnAt: new Date(reviewed.returnAt),
       requestExpiresAt: new Date(Date.now() + 12 * 3600000), turnaroundMinutes: 1440, requestKey: key,
       rentalMinor: BigInt(reviewed.rentalMinor), depositMinor: BigInt(0),
-      policySnapshot: { quoteId: record.id, policy: reviewed.policy, openingHours: reviewed.openingHours, items: current.lines },
+      policySnapshot: { boutique: current.boutique, collectionInstructions: reviewed.collectionInstructions, cancellationPolicy: reviewed.cancellationPolicy, returnPolicy: reviewed.returnPolicy, quoteId: record.id, policy: reviewed.policy, openingHours: reviewed.openingHours, items: current.lines },
       items: { create: current.lines.map(line => ({ variantId: line.variantId, quantity: line.quantity, productNameSnap: line.name, sizeSnapshot: line.size, categorySnapshot: line.category, rentalMinor: BigInt(line.rentalMinor), depositMinor: BigInt(0) })) },
       events: { create: { actorId: user.id, action: "CREATED", toStatus: "PENDING" } },
     }, include: bookingInclude });

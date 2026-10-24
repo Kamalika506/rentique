@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Input } from "@base-ui/react/input";
 import { ArrowDownToLine, ArrowUpRight, CalendarDays, ClipboardList, Info, LoaderCircle, Package, ShieldCheck } from "lucide-react";
@@ -39,7 +39,7 @@ function BookingTable({ bookings, data, caption }: { bookings: DashboardBooking[
 function RentalEvents({ data, kind }: { data: DashboardSnapshot; kind: "pickups" | "returns" }) {
   const events = kind === "pickups" ? data.upcomingPickups : data.upcomingReturns;
   return <section className={styles.panel}>
-    <div className={styles.panelHead}><div><h2 className={styles.panelTitle}>Upcoming {kind}</h2><p className={styles.muted}>Next 7 days · {events.length} scheduled</p></div><Link href={`/boutique/dashboard?view=schedule#${kind}`} className={styles.link}>View schedule</Link></div>
+    <div className={styles.panelHead}><div><h2 className={styles.panelTitle}>Upcoming {kind}</h2><p className={styles.muted}>Next 7 days · showing {events.length} of {kind === "pickups" ? data.summary.upcomingPickups : data.summary.upcomingReturns} scheduled</p></div><Link href={`/boutique/dashboard?view=schedule#${kind}`} className={styles.link}>View schedule</Link></div>
     {!events.length ? <EmptyState title={`No upcoming ${kind}`} description={`There are no scheduled ${kind} in this reporting window.`} /> : events.map((booking) => {
       const when = kind === "pickups" ? booking.pickupAt : booking.returnAt;
       return <div className={styles.event} key={booking.id}>
@@ -64,7 +64,7 @@ function Overview({ data, onExport }: { data: DashboardSnapshot; onExport: () =>
   ];
   return <>
     <div className={styles.metrics}>{metrics.map((metric) => <Link key={metric.label} href={metric.href.startsWith("/") ? metric.href : `/boutique/dashboard${metric.href}`} className={styles.metric}><h2 className={styles.metricLabel}>{metric.label}<ArrowUpRight size={14} /></h2><p className={styles.metricValue}>{metric.value}</p><p className={styles.metricHint}>{metric.hint}</p></Link>)}</div>
-    <section className={styles.panel}><div className={styles.panelHead}><div><h2 className={styles.panelTitle}>Recent bookings</h2><p className={styles.muted}>Latest booking activity</p></div><Link href="/boutique/dashboard?view=bookings" className={styles.link}>View all loaded bookings</Link></div><BookingTable bookings={data.recentBookings.slice(0, 5)} data={data} caption="Five most recent boutique bookings" /></section>
+    <section className={styles.panel}><div className={styles.panelHead}><div><h2 className={styles.panelTitle}>Recent bookings</h2><p className={styles.muted}>Latest booking activity</p></div><Link href="/boutique/dashboard?view=bookings" className={styles.link}>View all bookings</Link></div><BookingTable bookings={data.recentBookings.slice(0, 5)} data={data} caption="Five most recent boutique bookings" /></section>
     <div className={styles.split}><RentalEvents data={data} kind="pickups" /><RentalEvents data={data} kind="returns" /></div>
     <section className={styles.panel}><div className={styles.panelHead}><h2 className={styles.panelTitle}>Quick actions</h2></div><div className={styles.quickActions}>
       <Link className={styles.action} href="/boutique/products"><Package size={17} />Browse inventory</Link>
@@ -102,6 +102,8 @@ function BookingsView({ data, filter, selectedId }: { data: DashboardSnapshot; f
 
 export function BoutiqueDashboard({ service: providedService }: { service?: BoutiqueDashboardService }) {
   const params = useSearchParams();
+  const router = useRouter();
+  const queryString = params.toString();
   const view = parseDashboardView(params.get("view"));
   const [emptyDemo, setEmptyDemo] = useState(false);
   const live = useMemo(() => createLiveDashboardService(), []);
@@ -112,10 +114,16 @@ export function BoutiqueDashboard({ service: providedService }: { service?: Bout
   const [request, setRequest] = useState(0);
   const [feedback, setFeedback] = useState("");
   useEffect(() => {
+    if (service.mode === "live" && view !== "overview") {
+      const query = new URLSearchParams(queryString);
+      const booking = query.get("booking"), filter = query.get("filter");
+      router.replace(view === "inventory" ? "/boutique/products" : view === "schedule" ? "/boutique/calendar" : booking ? `/boutique/bookings/${encodeURIComponent(booking)}` : `/boutique/bookings${filter ? `?status=${encodeURIComponent(filter)}` : ""}`);
+      return;
+    }
     let active = true;
     service.getSnapshot().then((snapshot) => { if (active) { setData(snapshot); setLoading(false); } }).catch((cause: unknown) => { if (active) { setError(cause instanceof DashboardServiceError ? cause : new DashboardServiceError("UNAVAILABLE", "The dashboard couldn't be loaded. Please try again.")); setLoading(false); } });
     return () => { active = false; };
-  }, [service, request]);
+  }, [service, request, view, queryString, router]);
 
   function refresh() { setData(null); setError(null); setLoading(true); setFeedback(""); setRequest((value) => value + 1); }
   function exportSummary() {

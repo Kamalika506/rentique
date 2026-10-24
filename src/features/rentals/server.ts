@@ -1,3 +1,4 @@
+import { requestExpired } from "./expiry";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ApiError, currentUser, ownedBoutique } from "@/lib/api";
@@ -95,14 +96,29 @@ export async function cancelCustomerBooking(request: Request) {
 export async function boutiqueBookings(request: Request) {
   const { boutique } = await ownedBoutique();
   const params = new URL(request.url).searchParams;
-  const bookings = (await prisma.booking.findMany({ where: { boutiqueId: boutique.id }, include: bookingInclude, orderBy: { createdAt: "desc" } })).map(bookingRecord);
   const id = params.get("id");
-  if (id) { const booking = bookings.find(b => b.id === id); if (!booking) throw new ApiError(404, "Booking unavailable."); return booking; }
-  const now = Date.now(), until = now + 7 * 86400000;
-  const inWindow = (value: string) => Date.parse(value) >= now && Date.parse(value) < until;
-  const search = (params.get("search") ?? "").toLowerCase(), status = params.get("status");
-  return { items: bookings.filter(b => (!status || b.status === status) && `${b.id} ${b.customer.name} ${b.customer.email} ${b.products.map(p => p.name).join(" ")}`.toLowerCase().includes(search)),
-    upcomingPickups: bookings.filter(b => b.status === "CONFIRMED" && inWindow(b.pickupAt)), upcomingReturns: bookings.filter(b => ["CONFIRMED", "PICKED_UP"].includes(b.status) && inWindow(b.returnAt)) };
+  if (id) {
+    const booking = await prisma.booking.findFirst({ where: { id, boutiqueId: boutique.id }, include: bookingInclude });
+    if (!booking) throw new ApiError(404, "Booking unavailable.");
+    return bookingRecord(booking);
+  }
+  const now = new Date(), until = new Date(now.getTime() + 7 * 86400000);
+  const page = z.coerce.number().int().min(1).max(100000).parse(params.get("page") ?? 1), pageSize = 20;
+  const search = z.string().max(200).parse(params.get("search") ?? "").trim();
+  const status = z.enum(["PENDING", "CONFIRMED", "PICKED_UP", "RETURNED", "COMPLETED", "CANCELLED", "REJECTED", "EXPIRED"]).optional().parse(params.get("status") || undefined);
+  const activeRequest: Prisma.BookingWhereInput = { status: "PENDING", OR: [{ requestExpiresAt: { gt: now } }, { requestExpiresAt: null, pickupAt: { gt: now } }] };
+  const expiredRequest: Prisma.BookingWhereInput = { OR: [{ status: "EXPIRED" }, { status: "PENDING", OR: [{ requestExpiresAt: { lte: now } }, { requestExpiresAt: null, pickupAt: { lte: now } }] }] };
+  const where: Prisma.BookingWhereInput = { boutiqueId: boutique.id, AND: [
+    ...(status ? [status === "PENDING" ? activeRequest : status === "EXPIRED" ? expiredRequest : { status }] : []),
+    ...(search ? [{ OR: [{ id: { contains: search, mode: "insensitive" as const } }, { customer: { name: { contains: search, mode: "insensitive" as const } } }, { customer: { email: { contains: search, mode: "insensitive" as const } } }, { items: { some: { productNameSnap: { contains: search, mode: "insensitive" as const } } } }] }] : []),
+  ] };
+  const [total, rows, pickups, returns] = await prisma.$transaction([
+    prisma.booking.count({ where }),
+    prisma.booking.findMany({ where, include: bookingInclude, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
+    prisma.booking.findMany({ where: { boutiqueId: boutique.id, status: "CONFIRMED", pickupAt: { gte: now, lt: until } }, include: bookingInclude, orderBy: [{ pickupAt: "asc" }, { id: "asc" }], take: 20 }),
+    prisma.booking.findMany({ where: { boutiqueId: boutique.id, status: { in: ["CONFIRMED", "PICKED_UP"] }, returnAt: { gte: now, lt: until } }, include: bookingInclude, orderBy: [{ returnAt: "asc" }, { id: "asc" }], take: 20 }),
+  ], { isolationLevel: "RepeatableRead" });
+  return { items: rows.map(bookingRecord), page, pageSize, total, totalPages: Math.ceil(total / pageSize), upcomingPickups: pickups.map(bookingRecord), upcomingReturns: returns.map(bookingRecord) };
 }
 export async function updateBooking(request: Request) {
   const { user, boutique } = await ownedBoutique();
@@ -112,7 +128,7 @@ export async function updateBooking(request: Request) {
     if (!booking) throw new ApiError(404, "Booking unavailable.");
     const command = input.command;
     if (booking.version !== input.version || !bookingRecord(booking).allowedActions.some(action => action === command.action)) throw new ApiError(409, "The booking changed or this action is no longer allowed. Reload it.");
-    if (command.action === "CONFIRM" && booking.requestExpiresAt && booking.requestExpiresAt <= new Date()) throw new ApiError(409, "This reservation request has expired.");
+    if (command.action === "CONFIRM" && requestExpired(booking)) throw new ApiError(409, "This reservation request has expired.");
     const data: Prisma.BookingUpdateManyMutationInput = { version: { increment: 1 } };
     const now = new Date();
     if (command.action === "PICK_UP") {
@@ -144,7 +160,13 @@ export async function updateBooking(request: Request) {
     const changed = await tx.booking.updateMany({ where: { id: booking.id, boutiqueId: boutique.id, version: input.version }, data });
     if (!changed.count) throw new ApiError(409, "The booking changed. Reload it.");
     if (command.action === "RECORD_INSPECTION") {
-      const record = { condition: command.condition, notes: command.notes, recordedById: user.id, recordedAt: now };
+      const photos = command.photos ?? booking.inspection?.photos ?? [];
+      const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+      if (photos.some(photo => {
+        const url = new URL(photo);
+        return !cloud || url.origin !== "https://res.cloudinary.com" || !url.pathname.startsWith(`/${cloud}/image/upload/`) || !url.pathname.includes(`/rentique/${boutique.id}/`);
+      })) throw new ApiError(400, "Use photos uploaded by this boutique.");
+      const record = { condition: command.condition, photos, notes: command.notes, recordedById: user.id, recordedAt: now };
       await tx.bookingInspection.upsert({ where: { bookingId: booking.id }, create: { bookingId: booking.id, ...record }, update: record });
     }
     if (command.action === "RECORD_REFUND") {

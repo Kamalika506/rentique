@@ -75,7 +75,7 @@ export default function ProfilePage() {
           <Link className="underline" href="/change-password">Change password</Link>
           <SignOutButton className="underline" />
         </div>}
-        {customer.role !== "ADMIN" && <ReservationRequirements />}
+        {customer.role === "CUSTOMER" && <ReservationRequirements />}
         <section className="rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] p-6 sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
             <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-[#f3efe9] text-[#4c2544]">
@@ -203,7 +203,7 @@ export default function ProfilePage() {
           )}
         </section>
 
-        {customer.role !== "ADMIN" && (
+        {customer.role === "CUSTOMER" && (
           <div className="mt-8 grid gap-5 sm:grid-cols-2">
             <Link
               href="/wishlist"

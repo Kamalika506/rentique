@@ -185,6 +185,9 @@ model Boutique {
   categories   ProductCategory[]
   socialLink   String?           @db.VarChar(300)
   openingHours String            @default("") @db.VarChar(1000)
+  collectionInstructions String @default("") @db.VarChar(2000)
+  cancellationPolicy String @default("") @db.VarChar(2000)
+  returnPolicy String @default("") @db.VarChar(2000)
   rentalPolicy String            @default("") @db.VarChar(3000)
 
   status          BoutiqueStatus @default(PENDING)
@@ -404,6 +407,7 @@ model BookingInspection {
   id           String              @id @default(cuid())
   bookingId    String              @unique
   condition    InspectionCondition
+  photos       String[]            @default([])
   notes        String?             @db.Text
   recordedById String
   recordedAt   DateTime            @default(now()) @db.Timestamptz(6)

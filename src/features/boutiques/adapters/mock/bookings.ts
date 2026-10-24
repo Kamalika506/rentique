@@ -42,7 +42,7 @@ export function createDemoBookingService({ delayMs = 250, initialBookings = demo
       case "PICK_UP": updated.status = "PICKED_UP"; updated.pickedUpAt = now; break;
       case "RETURN": updated.status = "RETURNED"; updated.returnedAt = now; break;
       case "COMPLETE": updated.status = "COMPLETED"; updated.completedAt = now; break;
-      case "RECORD_INSPECTION": updated.inspection = { condition: command.condition, notes: command.notes, recordedAt: now }; break;
+      case "RECORD_INSPECTION": updated.inspection = { photos: command.photos ?? updated.inspection?.photos ?? [], condition: command.condition, notes: command.notes, recordedAt: now }; break;
       case "RECORD_REFUND": updated.manualRefund = { status: command.status, notes: command.notes, recordedAt: now }; break;
     }
     updated.version++; updated.allowedActions = demoActions(updated); records.set(id, updated); return structuredClone(updated);

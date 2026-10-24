@@ -1,8 +1,9 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { effectiveBookingStatus } from "./expiry";
 import { allowedActions } from "./rules";
 
-export const productInclude = { boutique: { select: { id: true, name: true, description: true, city: true, state: true, address: true, phone: true, contactEmail: true, socialLink: true, timezone: true, openingHours: true, rentalPolicy: true } }, catalogCategory: true, reviews: { where: { isHidden: false }, select: { rating: true } }, variants: { where: { archived: false }, orderBy: { size: "asc" as const } }, images: { orderBy: { position: "asc" as const } } };
-export const bookingInclude = { customer: { select: { name: true, email: true, phone: true } }, boutique: { select: { name: true, phone: true, address: true, city: true, openingHours: true, rentalPolicy: true } }, items: { include: { variant: { select: { productId: true } } } }, reviews: { select: { id: true, productId: true, rating: true, comment: true, isHidden: true } }, events: { orderBy: { createdAt: "asc" as const } }, inspection: true, refundRecord: true };
+export const productInclude = { boutique: { select: { id: true, name: true, description: true, city: true, state: true, address: true, phone: true, contactEmail: true, socialLink: true, timezone: true, openingHours: true, rentalPolicy: true, collectionInstructions: true, cancellationPolicy: true, returnPolicy: true } }, catalogCategory: true, reviews: { where: { isHidden: false }, select: { rating: true } }, variants: { where: { archived: false }, orderBy: { size: "asc" as const } }, images: { orderBy: { position: "asc" as const } } };
+export const bookingInclude = { customer: { select: { name: true, email: true, phone: true } }, boutique: { select: { name: true, contactEmail: true, phone: true, address: true, city: true, openingHours: true, rentalPolicy: true, collectionInstructions: true, cancellationPolicy: true, returnPolicy: true } }, items: { include: { variant: { select: { productId: true, product: { select: { images: { orderBy: { position: "asc" as const }, take: 1, select: { secureUrl: true } } } } } } } }, reviews: { select: { id: true, productId: true, rating: true, comment: true, isHidden: true } }, events: { orderBy: { createdAt: "asc" as const } }, inspection: true, refundRecord: true };
 type Product = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
 type Booking = Prisma.BookingGetPayload<{ include: typeof bookingInclude }>;
 export const categoryMap = { Bridal: "BRIDAL_WEAR", "Ethnic wear": "ETHNIC_WEAR", "Occasion wear": "PARTY_WEAR", "Western wear": "WESTERN_WEAR", Accessories: "ACCESSORIES" } as const;
@@ -25,10 +26,16 @@ export function managementProduct(product: Product) {
     images: product.images.map(image => ({ id: image.id, source: "cloudinary", url: image.secureUrl, secureUrl: image.secureUrl, publicId: image.publicId, alt: image.alt })) };
 }
 export function bookingRecord(booking: Booking) {
-  const status = booking.status === "PENDING" && booking.requestExpiresAt && booking.requestExpiresAt <= new Date() ? "EXPIRED" as const : booking.status;
-  return { id: booking.id, boutiqueId: booking.boutiqueId, boutique: booking.boutique, status, version: booking.version,
+  const status = effectiveBookingStatus(booking);
+  const snapshot = booking.policySnapshot && typeof booking.policySnapshot === "object" && !Array.isArray(booking.policySnapshot) ? booking.policySnapshot : {};
+  const savedShop = snapshot.boutique && typeof snapshot.boutique === "object" && !Array.isArray(snapshot.boutique) ? snapshot.boutique : {};
+  const shop = { ...booking.boutique, ...Object.fromEntries(Object.entries(savedShop).filter(([, value]) => typeof value === "string")) };
+  const text = (key: string, fallback: string) => typeof snapshot[key] === "string" ? snapshot[key] as string : fallback;
+  const collection = { ...shop, openingHours: text("openingHours", shop.openingHours), collectionInstructions: text("collectionInstructions", shop.collectionInstructions), cancellationPolicy: text("cancellationPolicy", shop.cancellationPolicy), returnPolicy: text("returnPolicy", shop.returnPolicy), rentalPolicy: text("policy", shop.rentalPolicy), savedAtBooking: typeof snapshot.collectionInstructions === "string" };
+  const savedItems = Array.isArray(snapshot.items) ? snapshot.items : [];
+  return { id: booking.id, boutiqueId: booking.boutiqueId, boutique: booking.boutique, collection, status, version: booking.version,
     customer: { name: booking.customer.name ?? "Customer", email: booking.customer.email ?? "", phone: booking.customer.phone ?? "" },
-    products: booking.items.map(item => ({ id: item.variant.productId, itemId: item.id, returnedQuantity: item.returnedQuantity, name: item.productNameSnap, size: item.sizeSnapshot, quantity: item.quantity, rentalMinor: Number(item.rentalMinor), depositMinor: 0 })),
+    products: booking.items.map(item => ({ id: item.variant.productId, itemId: item.id, returnedQuantity: item.returnedQuantity, image: (() => { const saved = savedItems.find(value => value && typeof value === "object" && !Array.isArray(value) && value.variantId === item.variantId); return saved && typeof saved === "object" && !Array.isArray(saved) && typeof saved.image === "string" ? saved.image : item.variant.product.images[0]?.secureUrl ?? ""; })(), name: item.productNameSnap, size: item.sizeSnapshot, quantity: item.quantity, rentalMinor: Number(item.rentalMinor), depositMinor: 0 })),
     pickupAt: booking.pickupAt.toISOString(), returnAt: booking.returnAt.toISOString(), createdAt: booking.createdAt.toISOString(), rentalMinor: Number(booking.rentalMinor), depositMinor: 0,
     allowedActions: [...allowedActions(status, Boolean(booking.inspection)).filter(action => action !== "RECORD_REFUND"), ...(status === "COMPLETED" && booking.turnaroundMinutes > 0 && !booking.stockReadyAt ? ["MARK_READY" as const] : [])],
     reviews: booking.reviews, review: booking.reviews[0] ?? null, requestExpiresAt: booking.requestExpiresAt?.toISOString(), policySnapshot: booking.policySnapshot,
@@ -36,6 +43,6 @@ export function bookingRecord(booking: Booking) {
     timeline: booking.events.map(event => ({ id: event.id, action: event.action, fromStatus: event.fromStatus, toStatus: event.toStatus, createdAt: event.createdAt.toISOString() })),
     rejectionReason: booking.rejectionReason ?? undefined, cancellationReason: booking.cancellationReason ?? undefined,
     pickedUpAt: booking.pickedUpAt?.toISOString(), returnedAt: booking.returnedAt?.toISOString(), completedAt: booking.completedAt?.toISOString(),
-    inspection: booking.inspection ? { condition: booking.inspection.condition, notes: booking.inspection.notes ?? "", recordedAt: booking.inspection.recordedAt.toISOString() } : undefined,
+    inspection: booking.inspection ? { photos: booking.inspection.photos, condition: booking.inspection.condition, notes: booking.inspection.notes ?? "", recordedAt: booking.inspection.recordedAt.toISOString() } : undefined,
     manualRefund: booking.refundRecord ? { status: booking.refundRecord.status, notes: booking.refundRecord.notes ?? "", recordedAt: booking.refundRecord.recordedAt.toISOString() } : undefined };
 }

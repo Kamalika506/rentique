@@ -7,6 +7,6 @@ export const lifecycleCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.enum(["CONFIRM", "PICK_UP", "COMPLETE", "MARK_READY"]) }),
   z.object({ action: z.literal("RETURN"), items: z.array(z.object({ itemId: z.string().min(1), quantity: z.number().int().min(1).max(100) }).strict()).min(1).max(10).optional() }).strict(),
   z.object({ action: z.enum(["REJECT", "CANCEL"]), reason }),
-  z.object({ action: z.literal("RECORD_INSPECTION"), condition: z.enum(["GOOD", "MINOR_DAMAGE", "MAJOR_DAMAGE"]), notes: z.string().trim().max(2000) }).refine((value) => value.condition === "GOOD" || value.notes.length >= 3, "Describe the damage in inspection notes."),
+  z.object({ action: z.literal("RECORD_INSPECTION"), condition: z.enum(["GOOD", "MINOR_DAMAGE", "MAJOR_DAMAGE"]), photos: z.array(z.string().url().max(2048)).max(6).optional(), notes: z.string().trim().max(2000) }).refine((value) => value.condition === "GOOD" || value.notes.length >= 3, "Describe the damage in inspection notes."),
   z.object({ action: z.literal("RECORD_REFUND"), status: z.enum(["PENDING", "PARTIALLY_REFUNDED", "REFUNDED", "WITHHELD", "NOT_REQUIRED"]), notes: z.string().trim().min(3, "Describe the manually recorded refund status.").max(1000) }),
 ]);

@@ -19,7 +19,7 @@ const fields = [
 
 function formDetails(profile: BoutiqueSettings): BoutiqueSettingsInput {
   return { name: profile.name, description: profile.description, contactEmail: profile.contactEmail, phone: profile.phone, address: profile.address,
-    city: profile.city, state: profile.state, postalCode: profile.postalCode, socialLink: profile.socialLink ?? "", timezone: profile.timezone, version: profile.version, openingHours: profile.openingHours ?? "", rentalPolicy: profile.rentalPolicy ?? "" };
+    city: profile.city, state: profile.state, postalCode: profile.postalCode, socialLink: profile.socialLink ?? "", timezone: profile.timezone, version: profile.version, collectionInstructions: profile.collectionInstructions ?? "", cancellationPolicy: profile.cancellationPolicy ?? "", returnPolicy: profile.returnPolicy ?? "", openingHours: profile.openingHours ?? "", rentalPolicy: profile.rentalPolicy ?? "" };
 }
 
 export function BoutiqueSettingsForm() {
@@ -53,6 +53,8 @@ export function BoutiqueSettingsForm() {
             <label className={`${styles.field} mt-5`}>About your boutique<textarea rows={5} className={styles.input} required minLength={20} maxLength={1000} value={form.description} disabled={saving} onChange={(event) => { setForm({ ...form, description: event.target.value }); setMessage(""); }} /></label>
             <label className="mt-5 block text-sm">Shop pickup and return hours<textarea rows={3} maxLength={1000} className={styles.input} value={form.openingHours ?? ""} disabled={saving} onChange={event => setForm({ ...form, openingHours: event.target.value })} placeholder="For example: Monday–Saturday, 10 am–7 pm; Sunday closed" /></label>
             <label className="mt-5 block text-sm">Customer-visible rental policies<textarea rows={5} maxLength={3000} className={styles.input} value={form.rentalPolicy ?? ""} disabled={saving} onChange={event => setForm({ ...form, rentalPolicy: event.target.value })} placeholder="Fit checks, included pieces, collection and return instructions. No online payments." /></label>
+            {([ ["collectionInstructions", "Collection instructions", "What to bring, counter location, fitting and collection steps."], ["cancellationPolicy", "Cancellation policy", "Cancellation deadlines and how customers should contact the shop."], ["returnPolicy", "Return policy", "Return location, deadlines, garment condition and late-return rules."] ] as const).map(([key, label, placeholder]) => <label key={key} className="mt-5 block text-sm">{label}<textarea rows={4} maxLength={2000} className={styles.input} value={form[key] ?? ""} disabled={saving} placeholder={placeholder} onChange={event => setForm({ ...form, [key]: event.target.value })} /></label>)}
+            <p className="mt-4 text-sm">Hours, contact details and policies are visible to customers before booking. Shop policies must follow the platform reservation rules.</p>
             <div className="mt-6 flex flex-wrap items-center gap-4"><Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save profile"}</Button><Button type="button" variant="outline" disabled={saving} onClick={reloadProfile}>Reload latest profile</Button>{profile.status === "APPROVED" && <Link href={`/boutiques/${encodeURIComponent(profile.id)}`} className={styles.link}>View storefront →</Link>}</div>
           </form>
         </> : <Button onClick={reloadProfile}>Try again</Button>}

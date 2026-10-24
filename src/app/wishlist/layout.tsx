@@ -4,4 +4,4 @@ import { AccountGuard } from "@/features/auth/guards";
 // Do not validate instant UI across this session-dependent boundary.
 export const instant = false;
 
-export default function Layout({ children }: { children: React.ReactNode }) { return <AccountGuard role="CUSTOMER">{children}</AccountGuard>; }
+export default function Layout({ children }: { children: React.ReactNode }) { return <AccountGuard role="CUSTOMER" customerOnly>{children}</AccountGuard>; }

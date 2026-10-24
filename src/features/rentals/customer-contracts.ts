@@ -8,6 +8,7 @@ export const selectionSchema = z.object({
 
 export const reviewedQuoteSchema = selectionSchema.safeExtend({
   boutiqueId: z.string(), rentalMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  collectionInstructions: z.string().default(""), cancellationPolicy: z.string().default(""), returnPolicy: z.string().default(""),
   fingerprint: z.string(), policy: z.string(), openingHours: z.string(),
 });
 export type ReviewedQuote = z.infer<typeof reviewedQuoteSchema>;

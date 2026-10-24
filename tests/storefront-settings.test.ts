@@ -26,6 +26,13 @@ test("storefront pagination rejects unbounded or invalid requests", () => {
   }
 });
 
+test("shop instructions and separate policies accept text with bounded lengths", () => {
+  const details = { ...profile, collectionInstructions: " Bring your booking reference. ", cancellationPolicy: "Call before collection.", returnPolicy: "Return all included pieces." };
+  assert.equal(boutiqueSettingsSchema.parse(details).collectionInstructions, "Bring your booking reference.");
+  for (const key of ["collectionInstructions", "cancellationPolicy", "returnPolicy"])
+    assert.equal(boutiqueSettingsSchema.safeParse({ ...details, [key]: "x".repeat(2001) }).success, false);
+});
+
 test("public boutique projection excludes private owner and application fields", () => {
   for (const key of ["owner", "ownerId", "reviewedBy", "reviewedById", "reviewEvents", "rejectionReason", "version"])
     assert.equal(key in publicBoutiqueSelect, false, `Public storefront must not expose ${key}`);

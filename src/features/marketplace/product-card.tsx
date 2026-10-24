@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { ArrowRight, Heart, Star } from "lucide-react";
 import { useWishlist } from "./wishlist-provider";
 import { safeProductImage, type CatalogProduct } from "./catalog";
@@ -8,6 +9,8 @@ import { safeProductImage, type CatalogProduct } from "./catalog";
 export function ProductCard({ product, rentalDates }: { product: CatalogProduct; rentalDates?: { pickupAt: string; returnAt: string } }) {
   const productHref = "/marketplace/" + encodeURIComponent(product.id) + (rentalDates ? "?" + new URLSearchParams(rentalDates).toString() : "");
   const { toggleWishlist, isWishlisted, isLoaded } = useWishlist();
+  const { data: session, status } = useSession();
+  const showWishlist = status !== "loading" && (!session?.user || session.user.role === "CUSTOMER");
   const wishlisted = isWishlisted(product.id);
   const image = safeProductImage(product.image);
   return <article className="overflow-hidden rounded-2xl border border-[#e4dfd7] bg-[#fffdf9] transition hover:shadow-md">
@@ -19,7 +22,7 @@ export function ProductCard({ product, rentalDates }: { product: CatalogProduct;
           <span className="absolute left-3 top-3 rounded-full bg-[#fffdf9]/95 px-3 py-1.5 text-xs text-[#4c2544]">{product.category}</span>
         </div>
       </Link>
-      <button type="button" onClick={() => toggleWishlist(product.id)} disabled={!isLoaded} aria-label={`${wishlisted ? "Remove" : "Add"} ${product.name} ${wishlisted ? "from" : "to"} wishlist`} aria-pressed={wishlisted} className="absolute right-3 top-3 flex size-11 items-center justify-center rounded-full bg-[#fffdf9]/95 text-[#4c2544] disabled:opacity-60"><Heart size={20} fill={wishlisted ? "currentColor" : "none"} /></button>
+      {showWishlist && <button type="button" onClick={() => toggleWishlist(product.id)} disabled={!isLoaded} aria-label={`${wishlisted ? "Remove" : "Add"} ${product.name} ${wishlisted ? "from" : "to"} wishlist`} aria-pressed={wishlisted} className="absolute right-3 top-3 flex size-11 items-center justify-center rounded-full bg-[#fffdf9]/95 text-[#4c2544] disabled:opacity-60"><Heart size={20} fill={wishlisted ? "currentColor" : "none"} /></button>}
     </div>
     <div className="p-5">
       <Link href={productHref} className="block"><h3 className="font-serif text-2xl text-[#4c2544]">{product.name}</h3></Link>

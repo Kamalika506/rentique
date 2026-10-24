@@ -1,9 +1,10 @@
+import { effectiveBookingStatus } from "./expiry";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ApiError, currentUser, ownedBoutique } from "@/lib/api";
 import { boutiqueRegistrationSchema } from "../boutiques/onboarding/schema";
 import { categoryLabel, categoryMap, bookingInclude, bookingRecord } from "./records";
-import type { Boutique } from "@/generated/prisma/client";
+import type { Boutique, Prisma } from "@/generated/prisma/client";
 
 function application(boutique: Boutique) {
   return { id: boutique.id, status: boutique.status, submittedAt: boutique.submittedAt.toISOString(), rejectionReason: boutique.rejectionReason ?? undefined,
@@ -50,18 +51,27 @@ export async function calendar(request: Request) {
 }
 export async function dashboard() {
   const { boutique } = await ownedBoutique();
-  const [records, products] = await Promise.all([
-    prisma.booking.findMany({ where: { boutiqueId: boutique.id }, include: bookingInclude, orderBy: { createdAt: "desc" } }),
-    prisma.product.findMany({ where: { boutiqueId: boutique.id }, include: { variants: { where: { archived: false } } } }),
-  ]);
   const now = new Date(), until = new Date(now.getTime() + 7 * 86400000);
-  const bookings = records.map(b => ({ id: b.id, customer: b.customer.name ?? "Customer", product: b.items.map(i => i.productNameSnap).join(", "), status: b.status, createdAt: b.createdAt.toISOString(), pickupAt: b.pickupAt.toISOString(), returnAt: b.returnAt.toISOString(), rentalAmountMinor: Number(b.rentalMinor) }));
-  const inWindow = (value: string) => new Date(value) >= now && new Date(value) < until;
-  const upcomingPickups = bookings.filter(b => b.status === "CONFIRMED" && inWindow(b.pickupAt)), upcomingReturns = bookings.filter(b => ["CONFIRMED", "PICKED_UP"].includes(b.status) && inWindow(b.returnAt));
-  const completed = records.filter(b => b.status === "COMPLETED");
+  const where = { boutiqueId: boutique.id };
+  const pending: Prisma.BookingWhereInput = { ...where, status: "PENDING", OR: [{ requestExpiresAt: { gt: now } }, { requestExpiresAt: null, pickupAt: { gt: now } }] };
+  const pickups: Prisma.BookingWhereInput = { ...where, status: "CONFIRMED", pickupAt: { gte: now, lt: until } };
+  const returns: Prisma.BookingWhereInput = { ...where, status: { in: ["CONFIRMED", "PICKED_UP"] }, returnAt: { gte: now, lt: until } };
+  const select = { id: true, status: true, requestExpiresAt: true, createdAt: true, pickupAt: true, returnAt: true, rentalMinor: true, customer: { select: { name: true } }, items: { select: { productNameSnap: true } } } satisfies Prisma.BookingSelect;
+  const [activeProducts, totalBookings, pendingRequests, completed, pickupCount, returnCount, recent, pickupRows, returnRows] = await prisma.$transaction([
+    prisma.product.count({ where: { ...where, archived: false } }),
+    prisma.booking.count({ where }),
+    prisma.booking.count({ where: pending }),
+    prisma.booking.aggregate({ where: { ...where, status: "COMPLETED" }, _count: true, _sum: { rentalMinor: true } }),
+    prisma.booking.count({ where: pickups }),
+    prisma.booking.count({ where: returns }),
+    prisma.booking.findMany({ where, select, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: 5 }),
+    prisma.booking.findMany({ where: pickups, select, orderBy: [{ pickupAt: "asc" }, { id: "asc" }], take: 20 }),
+    prisma.booking.findMany({ where: returns, select, orderBy: [{ returnAt: "asc" }, { id: "asc" }], take: 20 }),
+  ], { isolationLevel: "RepeatableRead" });
+  const serialize = (b: typeof recent[number]) => ({ id: b.id, customer: b.customer.name ?? "Customer", product: b.items.map(i => i.productNameSnap).join(", "), status: effectiveBookingStatus(b, now), createdAt: b.createdAt.toISOString(), pickupAt: b.pickupAt.toISOString(), returnAt: b.returnAt.toISOString(), rentalAmountMinor: Number(b.rentalMinor) });
   return { boutiqueName: boutique.name, currency: "INR", timezone: boutique.timezone, asOf: now.toISOString(), scheduleUntil: until.toISOString(), summary: {
-    activeProducts: products.filter(p => !p.archived).length, totalBookings: records.length, pendingRequests: records.filter(b => b.status === "PENDING").length, upcomingPickups: upcomingPickups.length, upcomingReturns: upcomingReturns.length, completedRentals: completed.length, completedRentalRevenueMinor: completed.reduce((sum, b) => sum + Number(b.rentalMinor), 0) },
-    recentBookings: bookings, upcomingPickups, upcomingReturns, products: products.map(p => ({ id: p.id, name: p.name, category: categoryLabel(p.category), active: !p.archived, stock: p.variants.reduce((sum, v) => sum + v.quantity, 0), rentalPriceMinor: Number(p.rentalPriceMinor) })) };
+    activeProducts, totalBookings, pendingRequests, upcomingPickups: pickupCount, upcomingReturns: returnCount, completedRentals: completed._count, completedRentalRevenueMinor: Number(completed._sum.rentalMinor ?? 0) },
+    recentBookings: recent.map(serialize), upcomingPickups: pickupRows.map(serialize), upcomingReturns: returnRows.map(serialize), products: [] };
 }
 export async function analytics() {
   const { boutique } = await ownedBoutique();
